@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'api_service.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,7 +54,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result['success']) {
         _showSuccess(_isSignIn ? 'Welcome back!' : 'Account created!');
-        // Handle navigation to home screen here
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
       } else {
         _showError(result['message']);
       }

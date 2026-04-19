@@ -41,6 +41,18 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  static Future<Map<String, dynamic>> getPrayerTimes({
+    required String city,
+    int method = 3, // Default to Muslim World League
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/prayer-times?city=$city&method=$method'),
+      headers: {'Accept': 'application/json'},
+    );
+
+    return _handleResponse(response);
+  }
+
   static Map<String, dynamic> _handleResponse(http.Response response) {
     final data = jsonDecode(response.body);
     if (response.statusCode >= 200 && response.statusCode < 300) {
