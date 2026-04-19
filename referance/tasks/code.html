@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Sacred Pause - Planning</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-dim": "#791903",
+                        "on-primary": "#edfded",
+                        "surface-tint": "#546356",
+                        "surface-container-highest": "#e3e3db",
+                        "background": "#fbf9f4",
+                        "on-tertiary-fixed-variant": "#5f6733",
+                        "on-background": "#31332e",
+                        "surface-bright": "#fbf9f4",
+                        "on-secondary-container": "#4b5449",
+                        "on-error-container": "#6e1400",
+                        "primary-fixed": "#d7e7d6",
+                        "on-primary-fixed": "#354337",
+                        "on-primary-fixed-variant": "#515f52",
+                        "on-surface-variant": "#5e6059",
+                        "on-surface": "#31332e",
+                        "surface-container": "#efeee7",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#dce5d7",
+                        "tertiary-container": "#ebf4b3",
+                        "primary-dim": "#48574a",
+                        "error-container": "#fd795a",
+                        "secondary-dim": "#4d554b",
+                        "on-error": "#fff7f6",
+                        "tertiary": "#5c6330",
+                        "error": "#a73b21",
+                        "on-secondary": "#f3fced",
+                        "tertiary-fixed-dim": "#dde5a5",
+                        "outline": "#7a7b75",
+                        "primary-fixed-dim": "#c9d9c9",
+                        "secondary-fixed-dim": "#ced7c9",
+                        "on-secondary-fixed": "#394237",
+                        "on-secondary-fixed-variant": "#555e53",
+                        "tertiary-dim": "#505725",
+                        "inverse-surface": "#0e0e0c",
+                        "outline-variant": "#b2b2ab",
+                        "inverse-on-surface": "#9e9d99",
+                        "on-tertiary-fixed": "#434a1a",
+                        "surface": "#fbf9f4",
+                        "surface-variant": "#e3e3db",
+                        "primary": "#546356",
+                        "on-primary-container": "#475549",
+                        "surface-container-high": "#e9e8e1",
+                        "secondary": "#596156",
+                        "inverse-primary": "#eefeed",
+                        "on-tertiary-container": "#555c2a",
+                        "surface-dim": "#dadad2",
+                        "surface-container-low": "#f5f4ed",
+                        "on-tertiary": "#f6ffbd",
+                        "tertiary-fixed": "#ebf4b3",
+                        "secondary-container": "#dce5d7",
+                        "primary-container": "#d7e7d6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Manrope', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .sage-gradient {
+            background: linear-gradient(135deg, #546356 0%, #48574a 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl font-manrope font-light tracking-tight docked full-width top-0 sticky z-50 no-border tonal-shift-bg-stone-100 shadow-[0_10px_30px_rgba(49,51,46,0.04)] flex items-center justify-between px-6 py-4 w-full">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="close-up portrait of a serene young woman with soft natural lighting and neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZFDUOr7S3ZJE-WwRXm_QC0kxr5ER8E2674nEo_VG5FzaKU2lqa4K302WA0HlF-Ck8IXnsv_G6PxLIHUJAZuwP3JN5tuTa1_sWQhFbQkgiir-vq7OyHJAF0__WMA8E6_rkkFKBH4nbcL6ocouKpqIM_JAEuqT1wxMI3w2-Hiqzw0gyq4DL28B01Q2aV9HsMNxmAL0hJa8-RCxpFgNnGlJ3myY0zN6bZNonRGt4jgDPCuE027jnXsJnSzy_5ILV6eEc4Y03UxcpBoU"/>
+</div>
+<span class="text-lg font-semibold tracking-widest uppercase text-stone-800 dark:text-stone-100">The Sacred Pause</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-stone-700 dark:text-stone-200 hover:opacity-80 transition-opacity">settings</button>
+</div>
+</header>
+<main class="max-w-2xl mx-auto px-6 pb-32">
+<!-- Daily Focus Area (Bento-style Header) -->
+<section class="mt-12 space-y-8">
+<div class="space-y-2">
+<p class="text-on-surface-variant font-medium tracking-widest uppercase text-[10px]">Today's Intention</p>
+<h1 class="text-4xl md:text-5xl font-extralight tracking-tight text-on-surface leading-tight">Quiet the mind, find <span class="italic font-normal">clarity</span> in the pause.</h1>
+</div>
+<!-- Focus Glass Card -->
+<div class="glass-card p-8 rounded-xl shadow-[0_10px_30px_rgba(49,51,46,0.04)] relative overflow-hidden group">
+<div class="absolute -right-10 -top-10 w-40 h-40 bg-primary-container/20 rounded-full blur-3xl transition-transform group-hover:scale-150 duration-700"></div>
+<div class="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="space-y-4">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">filter_vintage</span>
+<span class="text-xs font-bold uppercase tracking-widest">Main Focus</span>
+</div>
+<h2 class="text-2xl font-light text-on-surface">Complete the "Reflection" manuscript</h2>
+<div class="flex gap-4">
+<span class="text-xs text-on-surface-variant bg-surface-container px-3 py-1 rounded-full">Deep Work</span>
+<span class="text-xs text-on-surface-variant bg-surface-container px-3 py-1 rounded-full">90 mins</span>
+</div>
+</div>
+<button class="sage-gradient text-on-primary px-8 py-3 rounded-full text-sm font-semibold tracking-wide shadow-lg active:scale-95 duration-200">
+                        Start Focus
+                    </button>
+</div>
+</div>
+</section>
+<!-- Structured Task List Section -->
+<section class="mt-16 space-y-10">
+<div class="flex items-center justify-between border-b border-outline-variant/10 pb-4">
+<h3 class="text-xl font-light tracking-tight text-on-surface">Scheduled Tasks</h3>
+<button class="text-primary text-sm font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span> Add New
+                </button>
+</div>
+<div class="space-y-4">
+<!-- Task Category: Morning -->
+<div class="space-y-3">
+<h4 class="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant px-2">Morning Rituals</h4>
+<div class="space-y-1">
+<!-- Task Item -->
+<div class="group flex items-center justify-between p-4 bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl">
+<div class="flex items-center gap-4">
+<div class="w-6 h-6 rounded-md border-2 border-primary/20 flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-sm text-primary opacity-0 group-hover:opacity-40">check</span>
+</div>
+<div>
+<p class="text-on-surface text-sm font-medium">Morning meditation and breathwork</p>
+<p class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter">07:00 AM</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">more_vert</span>
+</div>
+<!-- Completed Task -->
+<div class="group flex items-center justify-between p-4 bg-surface-container-low/50 rounded-xl">
+<div class="flex items-center gap-4">
+<div class="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-on-primary" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-sm font-medium line-through">Review daily intention</p>
+<p class="text-[10px] text-on-surface-variant/60 font-medium uppercase tracking-tighter">06:30 AM</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Task Category: Afternoon -->
+<div class="space-y-3 pt-4">
+<h4 class="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant px-2">Focus Sessions</h4>
+<div class="space-y-1">
+<div class="group flex items-center justify-between p-4 bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl border-l-4 border-tertiary">
+<div class="flex items-center gap-4">
+<div class="w-6 h-6 rounded-md border-2 border-primary/20 flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-sm text-primary opacity-0 group-hover:opacity-40">check</span>
+</div>
+<div>
+<p class="text-on-surface text-sm font-medium">Research for new chapter</p>
+<div class="flex items-center gap-2 mt-1">
+<p class="text-[10px] text-tertiary font-bold uppercase tracking-tighter">Priority High</p>
+<span class="w-1 h-1 bg-outline-variant rounded-full"></span>
+<p class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter">14:00 PM</p>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">more_vert</span>
+</div>
+<div class="group flex items-center justify-between p-4 bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl">
+<div class="flex items-center gap-4">
+<div class="w-6 h-6 rounded-md border-2 border-primary/20 flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-sm text-primary opacity-0 group-hover:opacity-40">check</span>
+</div>
+<div>
+<p class="text-on-surface text-sm font-medium">Coordinate with editorial team</p>
+<p class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter">16:30 PM</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">more_vert</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Small Prayer/Pause Pulse Component -->
+<section class="mt-12">
+<div class="bg-primary-container/30 p-6 rounded-2xl flex items-center justify-between border border-primary/5">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">shutter_speed</span>
+</div>
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-primary">Next Sacred Pause</p>
+<p class="text-sm font-semibold text-on-primary-container">Asr Reflection in 42 minutes</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary/40">chevron_right</span>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center mx-auto max-w-md">
+<div class="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl w-[90%] rounded-full mx-auto flex justify-around items-center py-3 shadow-[0_10px_30px_rgba(49,51,46,0.06)] px-2">
+<!-- Home -->
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 px-5 py-2 hover:text-emerald-700 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="text-[10px] font-manrope font-medium uppercase tracking-widest">Home</span>
+</a>
+<!-- Plan (Active) -->
+<a class="flex flex-col items-center justify-center bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 rounded-full px-5 py-2 active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">event_note</span>
+<span class="text-[10px] font-manrope font-medium uppercase tracking-widest">Plan</span>
+</a>
+<!-- Journal -->
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 px-5 py-2 hover:text-emerald-700 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+<span class="text-[10px] font-manrope font-medium uppercase tracking-widest">Journal</span>
+</a>
+<!-- Me -->
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 px-5 py-2 hover:text-emerald-700 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="text-[10px] font-manrope font-medium uppercase tracking-widest">Me</span>
+</a>
+</div>
+</nav>
+</body></html>
