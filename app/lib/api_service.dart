@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Use 10.0.2.2 for Android Emulator to reach localhost, 
-  // or your machine's IP address for physical devices.
   static const String baseUrl = 'http://localhost:8000/api';
 
   static Future<Map<String, dynamic>> register({
@@ -22,7 +21,14 @@ class ApiService {
       }),
     );
 
-    return _handleResponse(response);
+    final result = _handleResponse(response);
+    if (result['success'] && result['data']['access_token'] != null) {
+      print('Token found in response, saving...');
+      await _saveToken(result['data']['access_token']);
+    } else {
+      print('Token NOT found in response: ${result['data']}');
+    }
+    return result;
   }
 
   static Future<Map<String, dynamic>> login({
@@ -38,12 +44,19 @@ class ApiService {
       }),
     );
 
-    return _handleResponse(response);
+    final result = _handleResponse(response);
+    if (result['success'] && result['data']['access_token'] != null) {
+      print('Token found in response, saving...');
+      await _saveToken(result['data']['access_token']);
+    } else {
+      print('Token NOT found in response: ${result['data']}');
+    }
+    return result;
   }
 
   static Future<Map<String, dynamic>> getPrayerTimes({
     required String city,
-    int method = 3, // Default to Muslim World League
+    int method = 3,
   }) async {
     final response = await http.get(
       Uri.parse('$baseUrl/prayer-times?city=$city&method=$method'),
@@ -54,15 +67,29 @@ class ApiService {
   }
 
   static Map<String, dynamic> _handleResponse(http.Response response) {
-    final data = jsonDecode(response.body);
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return {'success': true, 'data': data};
-    } else {
-      return {
-        'success': false, 
-        'message': data['message'] ?? 'An error occurred',
-        'errors': data['errors']
-      };
+    try {
+      final data = jsonDecode(response.body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return {'success': true, 'data': data};
+      } else {
+        return {
+          'success': false, 
+          'message': data['message'] ?? 'An error occurred',
+          'errors': data['errors']
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Invalid server response'};
     }
+  }
+
+  static Future<void> _saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+  }
+
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('auth_token');
   }
 }

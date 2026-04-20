@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'login_screen.dart';
+import 'planning_screen.dart';
+import 'models.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  Hive.registerAdapter(TaskAdapter());
+  Hive.registerAdapter(DayPlanAdapter());
+  
   runApp(const MyApp());
 }
 
@@ -16,7 +24,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF546356),
-          background: const Color(0xFFFBF9F4),
+          surface: const Color(0xFFFBF9F4),
         ),
         useMaterial3: true,
       ),

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
+import 'planning_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,9 +22,30 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _timeUntilNext = Duration.zero;
   Timer? _timer;
 
+  void _onNavTap(String label) {
+    if (label == 'Plan') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const PlanningScreen()),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final token = await ApiService.getToken();
+    if (token == null) {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+      return;
+    }
     _fetchPrayerTimes();
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_prayerTimes != null) {
@@ -666,10 +689,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(Icons.home, 'Home', true),
-                _buildNavItem(Icons.event_note, 'Plan', false),
-                _buildNavItem(Icons.auto_stories, 'Journal', false),
-                _buildNavItem(Icons.person, 'Me', false),
+                _buildNavItem(Icons.home, 'Home', true, () => _onNavTap('Home')),
+                _buildNavItem(Icons.event_note, 'Plan', false, () => _onNavTap('Plan')),
+                _buildNavItem(Icons.auto_stories, 'Journal', false, () => _onNavTap('Journal')),
+                _buildNavItem(Icons.person, 'Me', false, () => _onNavTap('Me')),
               ],
             ),
           ),
@@ -678,33 +701,37 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFD7E7D6).withOpacity(0.5) : Colors.transparent,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isActive ? const Color(0xFF354337) : const Color(0xFFB2B2AB),
-            size: 24,
-            fill: isActive ? 1.0 : 0.0,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label.toUpperCase(),
-            style: GoogleFonts.manrope(
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
+  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFD7E7D6).withOpacity(0.5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
               color: isActive ? const Color(0xFF354337) : const Color(0xFFB2B2AB),
+              size: 24,
+              fill: isActive ? 1.0 : 0.0,
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label.toUpperCase(),
+              style: GoogleFonts.manrope(
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+                color: isActive ? const Color(0xFF354337) : const Color(0xFFB2B2AB),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
