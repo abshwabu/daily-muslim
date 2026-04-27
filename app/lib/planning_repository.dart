@@ -19,6 +19,7 @@ class PlanningRepository {
     // 1. Check Local Cache
     final cachedPlan = box.get(dateStr);
     
+    // If we have a fresh cached plan, return it
     if (cachedPlan != null && !cachedPlan.isStale()) {
       return cachedPlan;
     }
@@ -31,11 +32,10 @@ class PlanningRepository {
           'Authorization': 'Bearer $authToken',
           'Accept': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        print('API response success: ${jsonResponse['success']}');
         final data = jsonResponse['data'];
 
         final Map<String, dynamic> sectionsJson = data['sections'] ?? {};
@@ -49,7 +49,6 @@ class PlanningRepository {
               sections[key] = [];
             }
           } catch (e) {
-            print('Error parsing section $key: $e');
             sections[key] = [];
           }
         });
@@ -64,18 +63,22 @@ class PlanningRepository {
         // 3. Update Local Store
         await box.put(dateStr, newPlan);
         return newPlan;
-      } else {
-        print('API error status: ${response.statusCode}');
-        print('API error body: ${response.body}');
       }
-    } catch (e, stack) {
-      print('Exception in getDayPlan: $e');
-      print(stack);
-      if (cachedPlan != null) return cachedPlan;
-      rethrow;
+    } catch (e) {
+      print('Network error in getDayPlan: $e');
     }
     
-    return cachedPlan;
+    // Fallback: Use exact date cache even if stale
+    if (cachedPlan != null) return cachedPlan;
+
+    // Last Resort: Use the most recent plan available in cache
+    if (box.isNotEmpty) {
+      final plans = box.values.toList();
+      plans.sort((a, b) => b.date.compareTo(a.date));
+      return plans.first;
+    }
+    
+    return null;
   }
 
   Future<List<TaskTemplate>> getTaskTemplates() async {

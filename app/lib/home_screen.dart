@@ -72,10 +72,20 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
         _calculateNextPrayer();
+      } else {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result['message'] ?? 'Failed to fetch prayer times')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network error. Using offline mode if available.')),
+        );
       }
     }
   }
