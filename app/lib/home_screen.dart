@@ -19,7 +19,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _nextPrayerName = '...';
   String _nextPrayerTime = '';
+  String _prevPrayerName = '...';
+  String _prevPrayerTime = '';
   Duration _timeUntilNext = Duration.zero;
+  double _prayerProgress = 0.0;
   Timer? _timer;
 
   void _onNavTap(String label) {
@@ -83,29 +86,96 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = DateTime.now();
     final prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
     
-    for (String name in prayers) {
+    DateTime? prevPrayerTime;
+    DateTime? nextPrayerTime;
+    String? nextName;
+
+    for (int i = 0; i < prayers.length; i++) {
+      final name = prayers[i];
       final timeStr = _prayerTimes![name];
-      final parts = timeStr.split(':');
-      final prayerTime = DateTime(now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
+      // Use regex to extract only HH:mm
+      final timeMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(timeStr);
+      if (timeMatch == null) continue;
       
-      if (prayerTime.isAfter(now)) {
-        setState(() {
-          _nextPrayerName = name;
-          _nextPrayerTime = timeStr;
-          _timeUntilNext = prayerTime.difference(now);
-        });
-        return;
+      final hour = int.parse(timeMatch.group(1)!);
+      final minute = int.parse(timeMatch.group(2)!);
+      final pTime = DateTime(now.year, now.month, now.day, hour, minute);
+      
+      if (pTime.isAfter(now)) {
+        nextPrayerTime = pTime;
+        nextName = name;
+        
+        if (i == 0) {
+          // Next is Fajr, previous was Isha yesterday
+          final ishaTimeStr = _prayerTimes!['Isha'];
+          final ishaMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(ishaTimeStr);
+          if (ishaMatch != null) {
+            final ishaHour = int.parse(ishaMatch.group(1)!);
+            final ishaMinute = int.parse(ishaMatch.group(2)!);
+            prevPrayerTime = DateTime(now.year, now.month, now.day - 1, ishaHour, ishaMinute);
+          }
+        } else {
+          final prevName = prayers[i - 1];
+          final prevTimeStr = _prayerTimes![prevName];
+          final prevMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(prevTimeStr);
+          if (prevMatch != null) {
+            final prevHour = int.parse(prevMatch.group(1)!);
+            final prevMinute = int.parse(prevMatch.group(2)!);
+            prevPrayerTime = DateTime(now.year, now.month, now.day, prevHour, prevMinute);
+          }
+        }
+        break;
       }
     }
 
-    // If all prayers passed, next is Fajr tomorrow
-    final fajrParts = _prayerTimes!['Fajr'].split(':');
-    final fajrTime = DateTime(now.year, now.month, now.day + 1, int.parse(fajrParts[0]), int.parse(fajrParts[1]));
-    setState(() {
-      _nextPrayerName = 'Fajr';
-      _nextPrayerTime = _prayerTimes!['Fajr'];
-      _timeUntilNext = fajrTime.difference(now);
-    });
+    if (nextPrayerTime == null) {
+      // All prayers passed today, next is Fajr tomorrow
+      nextName = 'Fajr';
+      final fajrTimeStr = _prayerTimes!['Fajr'];
+      final fajrMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(fajrTimeStr);
+      if (fajrMatch != null) {
+        final fajrHour = int.parse(fajrMatch.group(1)!);
+        final fajrMinute = int.parse(fajrMatch.group(2)!);
+        nextPrayerTime = DateTime(now.year, now.month, now.day + 1, fajrHour, fajrMinute);
+      }
+      
+      final ishaTimeStr = _prayerTimes!['Isha'];
+      final ishaMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(ishaTimeStr);
+      if (ishaMatch != null) {
+        final ishaHour = int.parse(ishaMatch.group(1)!);
+        final ishaMinute = int.parse(ishaMatch.group(2)!);
+        prevPrayerTime = DateTime(now.year, now.month, now.day, ishaHour, ishaMinute);
+      }
+    }
+
+    if (prevPrayerTime != null && nextPrayerTime != null) {
+      final total = nextPrayerTime.difference(prevPrayerTime).inSeconds;
+      final elapsed = now.difference(prevPrayerTime).inSeconds;
+      
+      // Determine previous prayer name
+      String prevName = '';
+      if (nextName == 'Fajr') {
+        prevName = 'Isha';
+      } else {
+        int nextIndex = prayers.indexOf(nextName!);
+        prevName = prayers[nextIndex - 1];
+      }
+
+      // Extract clean HH:mm for display
+      String cleanTime(String raw) {
+        final m = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(raw);
+        return m != null ? m.group(0)! : raw;
+      }
+
+      setState(() {
+        _nextPrayerName = nextName!;
+        _nextPrayerTime = cleanTime(_prayerTimes![nextName] ?? '');
+        _prevPrayerName = prevName;
+        _prevPrayerTime = cleanTime(_prayerTimes![prevName] ?? '');
+        _timeUntilNext = nextPrayerTime!.difference(now);
+        _prayerProgress = (elapsed / total).clamp(0.0, 1.0);
+      });
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -351,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: 0.66,
+                  widthFactor: _prayerProgress,
                   child: Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF546356),
@@ -365,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'FAJR ${_prayerTimes?['Fajr'] ?? ""}',
+                    '${_prevPrayerName.toUpperCase()} $_prevPrayerTime',
                     style: GoogleFonts.manrope(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -374,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Text(
-                    'ISHA ${_prayerTimes?['Isha'] ?? ""}',
+                    '${_nextPrayerName.toUpperCase()} $_nextPrayerTime',
                     style: GoogleFonts.manrope(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,

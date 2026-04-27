@@ -58,12 +58,34 @@ class ApiService {
     required String city,
     int method = 3,
   }) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/prayer-times?city=$city&method=$method'),
-      headers: {'Accept': 'application/json'},
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prayer-times?city=$city&method=$method'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
 
-    return _handleResponse(response);
+      final result = _handleResponse(response);
+      if (result['success']) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cached_prayer_times', jsonEncode(result['data']));
+        return result;
+      }
+      
+      // If API returned error, try cache
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_prayer_times');
+      if (cached != null) {
+        return {'success': true, 'data': jsonDecode(cached), 'from_cache': true};
+      }
+      return result;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_prayer_times');
+      if (cached != null) {
+        return {'success': true, 'data': jsonDecode(cached), 'from_cache': true};
+      }
+      return {'success': false, 'message': 'Network error and no cached data'};
+    }
   }
 
   static Map<String, dynamic> _handleResponse(http.Response response) {
