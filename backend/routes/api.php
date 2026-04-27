@@ -15,9 +15,11 @@ Route::get('/prayer-methods', [PrayerController::class, 'methods']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('v1')->group(function () {
         Route::get('/plan/{date?}', [PlanningController::class, 'getDayPlan']);
+        Route::get('/templates', [PlanningController::class, 'getTemplates']);
         Route::post('/tasks/rollover', [PlanningController::class, 'rollover']);
         Route::post('/tasks', [PlanningController::class, 'storeTask']);
         Route::patch('/tasks/{task}/toggle', [PlanningController::class, 'toggleTask']);
+        Route::post('/tasks/template/toggle', [PlanningController::class, 'toggleTemplateTask']);
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);

@@ -82,21 +82,30 @@ class _PlanningScreenState extends State<PlanningScreen> {
   Future<void> _toggleTask(models.Task task) async {
     // Optimistic Update
     setState(() {
-      final updatedTask = models.Task(
-        id: task.id,
-        title: task.title,
-        prayerAnchor: task.prayerAnchor,
-        dueDate: task.dueDate,
-        isCompleted: !task.isCompleted,
-        isHighPriority: task.isHighPriority,
+      final section = _dayPlan!.sections[task.prayerAnchor]!;
+      final index = section.indexWhere((t) => 
+        (t.id != null && t.id == task.id) || 
+        (t.id == null && t.templateId != null && t.templateId == task.templateId)
       );
       
-      final section = _dayPlan!.sections[task.prayerAnchor]!;
-      final index = section.indexWhere((t) => t.id == task.id);
-      section[index] = updatedTask;
+      if (index != -1) {
+        final current = section[index];
+        section[index] = models.Task(
+          id: current.id,
+          title: current.title,
+          prayerAnchor: current.prayerAnchor,
+          dueDate: current.dueDate,
+          isCompleted: !(current.isCompleted ?? false),
+          isHighPriority: current.isHighPriority,
+          templateId: current.templateId,
+          description: current.description,
+          category: current.category,
+          isTemplate: current.isTemplate,
+        );
+      }
     });
 
-    final success = await _repository.toggleTask(task.id, task.dueDate);
+    final success = await _repository.toggleTask(task);
     if (!success) {
       // Revert if failed
       _fetchDayPlan();
@@ -331,7 +340,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
   Widget _buildFocusCard() {
     final focusTask = _dayPlan?.sections.values
         .expand((x) => x)
-        .firstWhere((t) => t.isHighPriority, orElse: () => models.Task(id: 0, title: "Set a main focus for today", prayerAnchor: 'fajr', dueDate: DateTime.now()));
+        .firstWhere((t) => t.isHighPriority ?? false, orElse: () => models.Task(id: 0, title: "Set a main focus for today", prayerAnchor: 'fajr', dueDate: DateTime.now()));
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
@@ -541,13 +550,34 @@ class _PlanningScreenState extends State<PlanningScreen> {
   }
 
   Widget _buildTaskItem(models.Task task) {
+    // Determine icon based on category/title
+    IconData? spiritualIcon;
+    if (task.isTemplate ?? false) {
+      if (task.category == 'Azkar') {
+        spiritualIcon = Icons.auto_awesome_outlined;
+      } else if (task.category == 'Sunnah') {
+        spiritualIcon = Icons.mosque_outlined;
+      } else if (task.category == 'Quran') {
+        spiritualIcon = Icons.menu_book_outlined;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: task.isCompleted ? const Color(0xFFF5F4ED).withOpacity(0.5) : const Color(0xFFF5F4ED),
+        color: task.isCompleted ?? false ? const Color(0xFFF5F4ED).withOpacity(0.5) : const Color(0xFFF5F4ED),
         borderRadius: BorderRadius.circular(20),
-        border: task.isHighPriority ? const Border(left: BorderSide(color: Color(0xFF5C6330), width: 4)) : null,
+        border: task.isTemplate ?? false 
+            ? Border.all(color: const Color(0xFF546356).withOpacity(0.1), width: 1)
+            : (task.isHighPriority ?? false ? const Border(left: BorderSide(color: Color(0xFF5C6330), width: 4)) : null),
+        boxShadow: task.isTemplate ?? false ? [
+          BoxShadow(
+            color: Colors.white.withOpacity(0.5),
+            blurRadius: 10,
+            spreadRadius: 2,
+          )
+        ] : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -560,14 +590,14 @@ class _PlanningScreenState extends State<PlanningScreen> {
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
-                    color: task.isCompleted ? const Color(0xFF546356) : Colors.transparent,
+                    color: task.isCompleted ?? false ? const Color(0xFF546356) : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: const Color(0xFF546356).withOpacity(0.15),
                       width: 1.5,
                     ),
                   ),
-                  child: task.isCompleted
+                  child: task.isCompleted ?? false
                       ? const Icon(Icons.check, size: 16, color: Colors.white)
                       : null,
                 ),
@@ -576,19 +606,27 @@ class _PlanningScreenState extends State<PlanningScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    task.title,
-                    style: GoogleFonts.manrope(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                      color: task.isCompleted ? const Color(0xFF5E6059) : const Color(0xFF31332E),
-                    ),
+                  Row(
+                    children: [
+                      if (spiritualIcon != null) ...[
+                        Icon(spiritualIcon, size: 16, color: const Color(0xFF546356).withOpacity(0.6)),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        task.title,
+                        style: GoogleFonts.manrope(
+                          fontSize: 15,
+                          fontWeight: task.isTemplate ?? false ? FontWeight.w600 : FontWeight.w500,
+                          decoration: task.isCompleted ?? false ? TextDecoration.lineThrough : null,
+                          color: task.isCompleted ?? false ? const Color(0xFF5E6059) : const Color(0xFF31332E),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      if (task.isHighPriority) ...[
+                      if (task.isHighPriority ?? false) ...[
                         Text(
                           'PRIORITY HIGH',
                           style: GoogleFonts.manrope(
@@ -602,14 +640,25 @@ class _PlanningScreenState extends State<PlanningScreen> {
                         Container(width: 3, height: 3, decoration: const BoxDecoration(color: Color(0xFFB2B2AB), shape: BoxShape.circle)),
                         const SizedBox(width: 8),
                       ],
-                      Text(
-                        '07:00 AM', // Placeholder for actual time if stored
-                        style: GoogleFonts.manrope(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF5E6059),
+                      if (task.isTemplate ?? false)
+                        Text(
+                          '${task.category?.toUpperCase() ?? "HABIT"} • SYSTEM',
+                          style: GoogleFonts.manrope(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: const Color(0xFF546356).withOpacity(0.5),
+                          ),
+                        )
+                      else
+                        Text(
+                          '07:00 AM', // Placeholder for actual time if stored
+                          style: GoogleFonts.manrope(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF5E6059),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ],

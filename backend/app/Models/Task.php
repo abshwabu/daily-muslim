@@ -12,6 +12,7 @@ class Task extends Model
 
     protected $fillable = [
         'user_id',
+        'template_id',
         'title',
         'prayer_anchor',
         'due_date',
@@ -23,10 +24,16 @@ class Task extends Model
         'due_date' => 'date',
         'is_completed' => 'boolean',
         'is_high_priority' => 'boolean',
+        'template_id' => 'integer',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function taskTemplate(): BelongsTo
+    {
+        return $this->belongsTo(TaskTemplate::class, 'template_id');
     }
 }

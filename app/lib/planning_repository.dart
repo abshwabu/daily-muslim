@@ -6,6 +6,7 @@ import 'models.dart';
 class PlanningRepository {
   static const String baseUrl = 'http://localhost:8000/api/v1';
   static const String planBoxName = 'dayPlanBox';
+  static const String templateBoxName = 'taskTemplateBox';
 
   final String? authToken;
 
@@ -17,16 +18,13 @@ class PlanningRepository {
 
     // 1. Check Local Cache
     final cachedPlan = box.get(dateStr);
-    print('Cached plan for $dateStr: ${cachedPlan != null ? "Found" : "Not Found"}');
     
     if (cachedPlan != null && !cachedPlan.isStale()) {
-      print('Using fresh cached plan');
       return cachedPlan;
     }
 
     // 2. Fetch from API if stale or empty
     try {
-      print('Fetching from API: $baseUrl/plan/$dateStr');
       final response = await http.get(
         Uri.parse('$baseUrl/plan/$dateStr'),
         headers: {
@@ -35,19 +33,23 @@ class PlanningRepository {
         },
       );
 
-      print('API Response Code: ${response.statusCode}');
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        print('API Data: ${jsonResponse['success']}');
+        print('API response success: ${jsonResponse['success']}');
         final data = jsonResponse['data'];
 
         final Map<String, dynamic> sectionsJson = data['sections'] ?? {};
         final Map<String, List<Task>> sections = {};
         
         sectionsJson.forEach((key, value) {
-          if (value is List) {
-            sections[key] = value.map((t) => Task.fromJson(t)).toList();
-          } else {
+          try {
+            if (value is List) {
+              sections[key] = value.map((t) => Task.fromJson(t)).toList();
+            } else {
+              sections[key] = [];
+            }
+          } catch (e) {
+            print('Error parsing section $key: $e');
             sections[key] = [];
           }
         });
@@ -62,14 +64,57 @@ class PlanningRepository {
         // 3. Update Local Store
         await box.put(dateStr, newPlan);
         return newPlan;
+      } else {
+        print('API error status: ${response.statusCode}');
+        print('API error body: ${response.body}');
       }
-    } catch (e) {
-      // If API fails, return cached even if stale
+    } catch (e, stack) {
+      print('Exception in getDayPlan: $e');
+      print(stack);
       if (cachedPlan != null) return cachedPlan;
       rethrow;
     }
     
     return cachedPlan;
+  }
+
+  Future<List<TaskTemplate>> getTaskTemplates() async {
+    final box = await Hive.openBox<TaskTemplate>(templateBoxName);
+    
+    // Check if we have templates and they are not too old (7 days)
+    final settingsBox = await Hive.openBox('settings');
+    final lastUpdateStr = settingsBox.get('templates_last_update');
+    if (lastUpdateStr != null) {
+      final lastUpdate = DateTime.parse(lastUpdateStr);
+      if (DateTime.now().difference(lastUpdate).inDays < 7 && box.isNotEmpty) {
+        return box.values.toList();
+      }
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/templates'),
+        headers: {
+          'Authorization': 'Bearer $authToken',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body)['data'];
+        final templates = data.map((t) => TaskTemplate.fromJson(t)).toList();
+
+        await box.clear();
+        await box.addAll(templates);
+        final settingsBox = await Hive.openBox('settings');
+        await settingsBox.put('templates_last_update', DateTime.now().toIso8601String());
+
+        return templates;
+      }
+    } catch (e) {
+      if (box.isNotEmpty) return box.values.toList();
+    }
+    return [];
   }
 
   Future<bool> rolloverTasks() async {
@@ -83,7 +128,6 @@ class PlanningRepository {
       );
 
       if (response.statusCode == 200) {
-        // Clear cache for today to force refresh
         final box = await Hive.openBox<DayPlan>(planBoxName);
         await box.delete(DateTime.now().toIso8601String().split('T')[0]);
         return true;
@@ -94,20 +138,49 @@ class PlanningRepository {
     return false;
   }
 
-  Future<bool> toggleTask(int taskId, DateTime dueDate) async {
+  Future<bool> toggleTask(Task task) async {
     try {
-      final response = await http.patch(
-        Uri.parse('$baseUrl/tasks/$taskId/toggle'),
-        headers: {
-          'Authorization': 'Bearer $authToken',
-          'Accept': 'application/json',
-        },
-      );
+      final String url;
+      final Map<String, dynamic>? body;
+      final String method;
+
+      if (task.isTemplate ?? false) {
+        url = '$baseUrl/tasks/template/toggle';
+        method = 'POST';
+        body = {
+          'template_id': task.templateId,
+          'date': task.dueDate.toIso8601String().split('T')[0],
+        };
+      } else {
+        url = '$baseUrl/tasks/${task.id}/toggle';
+        method = 'PATCH';
+        body = null;
+      }
+
+      final http.Response response;
+      if (method == 'POST') {
+        response = await http.post(
+          Uri.parse(url),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(body),
+        );
+      } else {
+        response = await http.patch(
+          Uri.parse(url),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Accept': 'application/json',
+          },
+        );
+      }
 
       if (response.statusCode == 200) {
-        // Invalidate cache for that date
         final box = await Hive.openBox<DayPlan>(planBoxName);
-        await box.delete(dueDate.toIso8601String().split('T')[0]);
+        await box.delete(task.dueDate.toIso8601String().split('T')[0]);
         return true;
       }
     } catch (e) {
@@ -137,7 +210,6 @@ class PlanningRepository {
         final data = jsonDecode(response.body)['data'];
         final task = Task.fromJson(data);
         
-        // Invalidate cache for that date
         final box = await Hive.openBox<DayPlan>(planBoxName);
         await box.delete(dueDate.toIso8601String().split('T')[0]);
         
