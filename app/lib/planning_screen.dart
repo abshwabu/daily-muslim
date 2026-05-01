@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'focus_mode_screen.dart';
 import 'api_service.dart';
 import 'planning_repository.dart';
 import 'models.dart' as models;
@@ -417,7 +418,18 @@ class _PlanningScreenState extends State<PlanningScreen> {
                           _buildChip('90 mins'),
                         ],
                       ),
-                      _buildPrimaryButton('Start Focus'),
+                      _buildPrimaryButton('Start Focus', onPressed: () {
+                        if (focusTask != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => FocusModeScreen(
+                                taskTitle: focusTask.title,
+                                durationMinutes: 25,
+                              ),
+                            ),
+                          );
+                        }
+                      }),
                     ],
                   ),
                 ],
@@ -429,30 +441,33 @@ class _PlanningScreenState extends State<PlanningScreen> {
     );
   }
 
-  Widget _buildPrimaryButton(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(100),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF546356), Color(0xFF48574A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF546356).withOpacity(0.2),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+  Widget _buildPrimaryButton(String label, {VoidCallback? onPressed}) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(100),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF546356), Color(0xFF48574A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.manrope(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF546356).withOpacity(0.2),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.manrope(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
         ),
       ),
     );
