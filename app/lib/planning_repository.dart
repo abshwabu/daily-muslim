@@ -7,6 +7,7 @@ class PlanningRepository {
   static const String baseUrl = 'http://localhost:8000/api/v1';
   static const String planBoxName = 'dayPlanBox';
   static const String templateBoxName = 'taskTemplateBox';
+  static const String pendingTasksBoxName = 'pendingTasksBox';
 
   final String? authToken;
 
@@ -16,14 +17,12 @@ class PlanningRepository {
     final dateStr = date.toIso8601String().split('T')[0];
     final box = await Hive.openBox<DayPlan>(planBoxName);
 
-    // 1. Check Local Cache
-    final cachedPlan = box.get(dateStr);
-    
-    // If we have a fresh cached plan, return it
-    if (cachedPlan != null && !cachedPlan.isStale()) {
-      return cachedPlan;
-    }
+    // Try to sync pending tasks before fetching
+    await syncPendingTasks();
 
+    // 1. Check Local Cache
+    DayPlan? plan = box.get(dateStr);
+    
     // 2. Fetch from API if stale or empty
     try {
       final response = await http.get(
@@ -53,7 +52,7 @@ class PlanningRepository {
           }
         });
 
-        final newPlan = DayPlan(
+        plan = DayPlan(
           date: dateStr,
           prayerTimes: data['prayer_times'] ?? {},
           sections: sections,
@@ -61,24 +60,37 @@ class PlanningRepository {
         );
 
         // 3. Update Local Store
-        await box.put(dateStr, newPlan);
-        return newPlan;
+        await box.put(dateStr, plan);
       }
     } catch (e) {
       print('Network error in getDayPlan: $e');
     }
     
-    // Fallback: Use exact date cache even if stale
-    if (cachedPlan != null) return cachedPlan;
-
-    // Last Resort: Use the most recent plan available in cache
-    if (box.isNotEmpty) {
+    // Fallback: Use most recent cache if plan is still null
+    if (plan == null && box.isNotEmpty) {
       final plans = box.values.toList();
       plans.sort((a, b) => b.date.compareTo(a.date));
-      return plans.first;
+      plan = plans.first;
+    }
+
+    // 4. Merge Pending Tasks into the plan
+    if (plan != null) {
+      final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
+      final pendingTasks = pendingBox.values.where((t) => 
+        t.dueDate.toIso8601String().split('T')[0] == plan!.date
+      ).toList();
+
+      for (var task in pendingTasks) {
+        final section = plan.sections[task.prayerAnchor] ?? [];
+        // Check if task already exists (by title and anchor if no ID)
+        if (!section.any((t) => t.title == task.title)) {
+          section.add(task);
+          plan.sections[task.prayerAnchor] = section;
+        }
+      }
     }
     
-    return null;
+    return plan;
   }
 
   Future<List<TaskTemplate>> getTaskTemplates() async {
@@ -155,6 +167,22 @@ class PlanningRepository {
           'date': task.dueDate.toIso8601String().split('T')[0],
         };
       } else {
+        if (task.id == null) {
+          // Task is pending, just toggle locally
+          final box = await Hive.openBox<Task>(pendingTasksBoxName);
+          if (task.key != null) {
+            final updatedTask = Task(
+              title: task.title,
+              prayerAnchor: task.prayerAnchor,
+              dueDate: task.dueDate,
+              isCompleted: !(task.isCompleted ?? false),
+              isHighPriority: task.isHighPriority,
+            );
+            await box.put(task.key, updatedTask);
+            return true;
+          }
+          return false;
+        }
         url = '$baseUrl/tasks/${task.id}/toggle';
         method = 'PATCH';
         body = null;
@@ -193,6 +221,13 @@ class PlanningRepository {
   }
 
   Future<Task?> createTask(String title, String prayerAnchor, DateTime dueDate, {bool isHighPriority = false}) async {
+    final taskData = {
+      'title': title,
+      'prayer_anchor': prayerAnchor,
+      'due_date': dueDate.toIso8601String().split('T')[0],
+      'is_high_priority': isHighPriority,
+    };
+
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/tasks'),
@@ -201,12 +236,7 @@ class PlanningRepository {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({
-          'title': title,
-          'prayer_anchor': prayerAnchor,
-          'due_date': dueDate.toIso8601String().split('T')[0],
-          'is_high_priority': isHighPriority,
-        }),
+        body: jsonEncode(taskData),
       );
 
       if (response.statusCode == 201 || response.statusCode == 210) {
@@ -219,8 +249,58 @@ class PlanningRepository {
         return task;
       }
     } catch (e) {
-      return null;
+      print('Offline: Saving task to pending queue');
     }
-    return null;
+
+    // Offline or Error: Save to pending tasks
+    final pendingTask = Task(
+      title: title,
+      prayerAnchor: prayerAnchor,
+      dueDate: dueDate,
+      isHighPriority: isHighPriority,
+      isCompleted: false,
+    );
+
+    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
+    await pendingBox.add(pendingTask);
+
+    return pendingTask;
+  }
+
+  Future<void> syncPendingTasks() async {
+    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
+    if (pendingBox.isEmpty) return;
+
+    print('Syncing ${pendingBox.length} pending tasks...');
+    final tasks = List<Task>.from(pendingBox.values);
+    
+    for (int i = 0; i < tasks.length; i++) {
+      final task = tasks[i];
+      try {
+        final response = await http.post(
+          Uri.parse('$baseUrl/tasks'),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'title': task.title,
+            'prayer_anchor': task.prayerAnchor,
+            'due_date': task.dueDate.toIso8601String().split('T')[0],
+            'is_high_priority': task.isHighPriority,
+            'is_completed': task.isCompleted,
+          }),
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 201 || response.statusCode == 210) {
+          await pendingBox.deleteAt(0); // Delete the first one as we are iterating a copy
+          print('Synced task: ${task.title}');
+        }
+      } catch (e) {
+        print('Failed to sync task: ${task.title}. Error: $e');
+        break; // Stop syncing if network error
+      }
+    }
   }
 }

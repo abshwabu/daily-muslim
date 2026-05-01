@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'login_screen.dart';
-import 'planning_screen.dart';
+import 'home_screen.dart';
 import 'models.dart';
+import 'api_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,12 +11,15 @@ void main() async {
   Hive.registerAdapter(TaskAdapter());
   Hive.registerAdapter(DayPlanAdapter());
   Hive.registerAdapter(TaskTemplateAdapter());
+
+  final token = await ApiService.getToken();
   
-  runApp(const MyApp());
+  runApp(MyApp(isLoggedIn: token != null));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isLoggedIn;
+  const MyApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +33,7 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: isLoggedIn ? const HomeScreen() : const LoginScreen(),
     );
   }
 }
