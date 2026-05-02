@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -20,11 +22,163 @@ class _PlanningScreenState extends State<PlanningScreen> {
   models.DayPlan? _dayPlan;
   bool _isLoading = true;
   DateTime _selectedDate = DateTime.now();
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _initRepository();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  String _getCurrentAnchor() {
+    if (_dayPlan == null || _dayPlan!.prayerTimes.isEmpty) return 'fajr';
+
+    final now = DateTime.now();
+    final anchors = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    final prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    
+    List<DateTime> prayerDateTimes = [];
+    for (var name in prayers) {
+      final timeStr = _dayPlan!.prayerTimes[name];
+      if (timeStr == null) continue;
+      
+      final timeMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(timeStr);
+      if (timeMatch == null) continue;
+      
+      final hour = int.parse(timeMatch.group(1)!);
+      final minute = int.parse(timeMatch.group(2)!);
+      prayerDateTimes.add(DateTime(now.year, now.month, now.day, hour, minute));
+    }
+
+    if (prayerDateTimes.length < 5) return 'fajr';
+
+    // If before Fajr, we are in the 'isha' period from yesterday
+    if (now.isBefore(prayerDateTimes[0])) {
+      return 'isha';
+    }
+
+    for (int i = prayerDateTimes.length - 1; i >= 0; i--) {
+      if (now.isAfter(prayerDateTimes[i]) || now.isAtSameMomentAs(prayerDateTimes[i])) {
+        return anchors[i];
+      }
+    }
+    return 'fajr';
+  }
+
+  void _showFocusDurationDialog(models.Task task) {
+    final controller = TextEditingController(text: '25');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Focus Duration',
+          style: GoogleFonts.manrope(
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF31332E),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'How many minutes would you like to focus on "${task.title}"?',
+              style: GoogleFonts.manrope(color: const Color(0xFF5E6059)),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autofocus: true,
+              style: GoogleFonts.manrope(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF31332E),
+              ),
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                hintText: '25',
+                suffixText: 'min',
+                suffixStyle: GoogleFonts.manrope(
+                  color: const Color(0xFFB2B2AB),
+                  fontWeight: FontWeight.bold,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFE3E3DB).withOpacity(0.3),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 20),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8, bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'CANCEL',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: const Color(0xFF5E6059),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    int duration = int.tryParse(controller.text) ?? 25;
+                    if (duration <= 0) duration = 25;
+                    Navigator.pop(context);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => FocusModeScreen(
+                          taskTitle: task.title,
+                          durationMinutes: duration,
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF546356),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'START',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initRepository() async {
@@ -339,9 +493,46 @@ class _PlanningScreenState extends State<PlanningScreen> {
   }
 
   Widget _buildFocusCard() {
-    final focusTask = _dayPlan?.sections.values
-        .expand((x) => x)
-        .firstWhere((t) => t.isHighPriority ?? false, orElse: () => models.Task(id: 0, title: "Set a main focus for today", prayerAnchor: 'fajr', dueDate: DateTime.now()));
+    final currentAnchor = _getCurrentAnchor();
+    final anchors = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    final currentIndex = anchors.indexOf(currentAnchor);
+    
+    models.Task? actualFocusTask;
+    String displayAnchor = currentAnchor;
+
+    // 1. Look for focus in current anchor
+    final tasksInCurrent = _dayPlan?.sections[currentAnchor] ?? [];
+    for (var t in tasksInCurrent) {
+      if (t.isHighPriority ?? false) {
+        actualFocusTask = t;
+        break;
+      }
+    }
+
+    // 2. If not found, look for focus in future anchors for today
+    if (actualFocusTask == null && _dayPlan != null) {
+      for (int i = currentIndex + 1; i < anchors.length; i++) {
+        final futureAnchor = anchors[i];
+        final tasksInFuture = _dayPlan!.sections[futureAnchor] ?? [];
+        for (var t in tasksInFuture) {
+          if (t.isHighPriority ?? false) {
+            actualFocusTask = t;
+            displayAnchor = futureAnchor;
+            break;
+          }
+        }
+        if (actualFocusTask != null) break;
+      }
+    }
+
+    final focusTask = actualFocusTask ?? models.Task(
+      id: 0, 
+      title: "No focus set for ${currentAnchor.toUpperCase()}", 
+      prayerAnchor: currentAnchor, 
+      dueDate: DateTime.now()
+    );
+
+    final bool isFutureFocus = actualFocusTask != null && displayAnchor != currentAnchor;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
@@ -386,7 +577,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
                       const Icon(Icons.filter_vintage, color: Color(0xFF546356), size: 16),
                       const SizedBox(width: 8),
                       Text(
-                        'MAIN FOCUS',
+                        isFutureFocus ? 'UPCOMING FOCUS (${displayAnchor.toUpperCase()})' : 'MAIN FOCUS',
                         style: GoogleFonts.manrope(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -398,7 +589,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    focusTask?.title ?? 'Complete the "Reflection" manuscript',
+                    focusTask.title,
                     style: GoogleFonts.manrope(
                       fontSize: 24,
                       fontWeight: FontWeight.w300,
@@ -415,19 +606,14 @@ class _PlanningScreenState extends State<PlanningScreen> {
                         children: [
                           _buildChip('Deep Work'),
                           const SizedBox(width: 8),
-                          _buildChip('90 mins'),
+                          _buildChip(actualFocusTask != null ? 'Focus Mode' : 'Paced'),
                         ],
                       ),
-                      _buildPrimaryButton('Start Focus', onPressed: () {
-                        if (focusTask != null) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => FocusModeScreen(
-                                taskTitle: focusTask.title,
-                                durationMinutes: 25,
-                              ),
-                            ),
-                          );
+                      _buildPrimaryButton(actualFocusTask != null ? (isFutureFocus ? 'Prepare' : 'Start Focus') : 'Add New', onPressed: () {
+                        if (actualFocusTask != null) {
+                          _showFocusDurationDialog(actualFocusTask);
+                        } else {
+                          _showAddTaskSheet();
                         }
                       }),
                     ],
@@ -506,6 +692,18 @@ class _PlanningScreenState extends State<PlanningScreen> {
           );
           if (task != null) {
             _fetchDayPlan();
+          }
+        },
+        onStartFocus: (title, anchor) async {
+          final task = await _repository.createTask(
+            title,
+            anchor,
+            _selectedDate,
+            isHighPriority: true,
+          );
+          if (task != null) {
+            _fetchDayPlan();
+            _showFocusDurationDialog(task);
           }
         },
       ),
@@ -878,8 +1076,9 @@ class _PlanningScreenState extends State<PlanningScreen> {
 
 class _AddTaskSheet extends StatefulWidget {
   final Function(String, String, bool) onTaskCreated;
+  final Function(String, String)? onStartFocus;
 
-  const _AddTaskSheet({required this.onTaskCreated});
+  const _AddTaskSheet({required this.onTaskCreated, this.onStartFocus});
 
   @override
   State<_AddTaskSheet> createState() => _AddTaskSheetState();
@@ -918,121 +1117,162 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Create New Task',
-                  style: GoogleFonts.manrope(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w300,
-                    color: const Color(0xFF31332E),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Create New Task',
+                    style: GoogleFonts.manrope(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w300,
+                      color: const Color(0xFF31332E),
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: Color(0xFFB2B2AB)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            _buildLabel('TASK TITLE'),
-            TextField(
-              controller: _titleController,
-              autofocus: true,
-              style: GoogleFonts.manrope(fontSize: 18, color: const Color(0xFF31332E)),
-              decoration: InputDecoration(
-                hintText: 'What needs to be done?',
-                hintStyle: GoogleFonts.manrope(color: const Color(0xFFB2B2AB)),
-                filled: true,
-                fillColor: const Color(0xFFE3E3DB).withOpacity(0.3),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.all(20),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Color(0xFFB2B2AB)),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildLabel('PRAYER ANCHOR'),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].map((anchor) {
-                  final isActive = _selectedAnchor == anchor;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedAnchor = anchor),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isActive ? const Color(0xFF546356) : const Color(0xFFF5F4ED),
-                          borderRadius: BorderRadius.circular(100),
+              const SizedBox(height: 32),
+              _buildLabel('TASK TITLE'),
+              TextField(
+                controller: _titleController,
+                autofocus: true,
+                style: GoogleFonts.manrope(fontSize: 18, color: const Color(0xFF31332E)),
+                decoration: InputDecoration(
+                  hintText: 'What needs to be done?',
+                  hintStyle: GoogleFonts.manrope(color: const Color(0xFFB2B2AB)),
+                  filled: true,
+                  fillColor: const Color(0xFFE3E3DB).withOpacity(0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(20),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildLabel('PRAYER ANCHOR'),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].map((anchor) {
+                    final isActive = _selectedAnchor == anchor;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedAnchor = anchor),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isActive ? const Color(0xFF546356) : const Color(0xFFF5F4ED),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Text(
+                            anchor.toUpperCase(),
+                            style: GoogleFonts.manrope(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                              color: isActive ? Colors.white : const Color(0xFF5E6059),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildLabel('SET AS MAIN FOCUS'),
+                  Switch(
+                    value: _isHighPriority,
+                    activeColor: const Color(0xFF546356),
+                    onChanged: (val) => setState(() => _isHighPriority = val),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 64,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: _isHighPriority ? 3 : 1,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (_titleController.text.isNotEmpty) {
+                            widget.onTaskCreated(
+                              _titleController.text,
+                              _selectedAnchor,
+                              _isHighPriority,
+                            );
+                            Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF546356),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                          elevation: 0,
                         ),
                         child: Text(
-                          anchor.toUpperCase(),
+                          _isHighPriority ? 'CREATE' : 'CREATE TASK',
                           style: GoogleFonts.manrope(
-                            fontSize: 10,
+                            fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 1.0,
-                            color: isActive ? Colors.white : const Color(0xFF5E6059),
+                            letterSpacing: 2.0,
                           ),
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildLabel('SET AS MAIN FOCUS'),
-                Switch(
-                  value: _isHighPriority,
-                  activeColor: const Color(0xFF546356),
-                  onChanged: (val) => setState(() => _isHighPriority = val),
-                ),
-              ],
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 64,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_titleController.text.isNotEmpty) {
-                    widget.onTaskCreated(
-                      _titleController.text,
-                      _selectedAnchor,
-                      _isHighPriority,
-                    );
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF546356),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  elevation: 0,
-                ),
-                child: Text(
-                  'CREATE TASK',
-                  style: GoogleFonts.manrope(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
-                  ),
+                    if (_isHighPriority) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            if (_titleController.text.isNotEmpty) {
+                              widget.onStartFocus?.call(
+                                _titleController.text,
+                                _selectedAnchor,
+                              );
+                              Navigator.pop(context);
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF546356), width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                            foregroundColor: const Color(0xFF546356),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                          ),
+                          icon: const Icon(Icons.timer_outlined, size: 20),
+                          label: Text(
+                            'FOCUS',
+                            style: GoogleFonts.manrope(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

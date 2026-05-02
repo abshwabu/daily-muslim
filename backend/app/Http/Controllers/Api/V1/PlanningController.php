@@ -38,13 +38,13 @@ class PlanningController extends Controller
         }
 
         // Fetch Templates (Cache for 24 hours, but we filter them per request)
-        $allTemplates = cache()->remember('task_templates', 86400, function() {
-            return TaskTemplate::all();
+        $templatesArray = cache()->remember('task_templates_array', 86400, function() {
+            return TaskTemplate::all()->toArray();
         });
 
         $dayOfWeek = $date->format('l'); // e.g., 'Friday'
-        $templates = $allTemplates->filter(function ($template) use ($dayOfWeek) {
-            return is_null($template->day_of_week) || $template->day_of_week === $dayOfWeek;
+        $templates = collect($templatesArray)->filter(function ($template) use ($dayOfWeek) {
+            return is_null($template['day_of_week']) || $template['day_of_week'] === $dayOfWeek;
         });
 
         // Fetch Tasks
@@ -60,14 +60,14 @@ class PlanningController extends Controller
             
             // Add templates for this section
             foreach ($templates->where('prayer_anchor', $section) as $template) {
-                $userTask = $tasks->where('template_id', $template->id)->first();
+                $userTask = $tasks->where('template_id', $template['id'])->first();
                 $sectionTasks[] = [
                     'id' => $userTask?->id,
-                    'template_id' => $template->id,
-                    'title' => $template->title,
-                    'description' => $template->description,
-                    'category' => $template->category,
-                    'prayer_anchor' => $template->prayer_anchor,
+                    'template_id' => $template['id'],
+                    'title' => $template['title'],
+                    'description' => $template['description'] ?? null,
+                    'category' => $template['category'],
+                    'prayer_anchor' => $template['prayer_anchor'],
                     'due_date' => $date->toDateString(),
                     'is_completed' => $userTask?->is_completed ?? false,
                     'is_high_priority' => $userTask?->is_high_priority ?? false,

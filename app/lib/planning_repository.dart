@@ -17,14 +17,15 @@ class PlanningRepository {
     final dateStr = date.toIso8601String().split('T')[0];
     final box = await Hive.openBox<DayPlan>(planBoxName);
 
+    print('PlanningRepository: getDayPlan for $dateStr');
+
     // Try to sync pending tasks before fetching
     await syncPendingTasks();
 
-    // 1. Check Local Cache
-    DayPlan? plan = box.get(dateStr);
-    
-    // 2. Fetch from API if stale or empty
+    // 1. Try to Fetch from API
+    DayPlan? plan;
     try {
+      print('PlanningRepository: Fetching from API $baseUrl/plan/$dateStr');
       final response = await http.get(
         Uri.parse('$baseUrl/plan/$dateStr'),
         headers: {
@@ -32,6 +33,8 @@ class PlanningRepository {
           'Accept': 'application/json',
         },
       ).timeout(const Duration(seconds: 10));
+
+      print('PlanningRepository: API Response Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
@@ -59,34 +62,54 @@ class PlanningRepository {
           updatedAt: DateTime.now(),
         );
 
-        // 3. Update Local Store
+        // Update Local Store
         await box.put(dateStr, plan);
+      } else {
+        print('PlanningRepository: API Error: ${response.body}');
       }
     } catch (e) {
-      print('Network error in getDayPlan: $e');
+      print('PlanningRepository: Network error: $e');
     }
     
-    // Fallback: Use most recent cache if plan is still null
-    if (plan == null && box.isNotEmpty) {
-      final plans = box.values.toList();
-      plans.sort((a, b) => b.date.compareTo(a.date));
-      plan = plans.first;
+    // 2. Fallback to Local Cache for THIS date
+    if (plan == null) {
+      plan = box.get(dateStr);
+      if (plan != null) {
+        print('PlanningRepository: Using cached plan for $dateStr');
+      }
+    }
+
+    // 3. Create a minimal plan shell if still null (to allow merging pending tasks)
+    if (plan == null) {
+      print('PlanningRepository: Creating empty plan shell for $dateStr');
+      plan = DayPlan(
+        date: dateStr,
+        prayerTimes: {},
+        sections: {
+          'fajr': [],
+          'dhuhr': [],
+          'asr': [],
+          'maghrib': [],
+          'isha': [],
+        },
+        updatedAt: DateTime.now(),
+      );
     }
 
     // 4. Merge Pending Tasks into the plan
-    if (plan != null) {
-      final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
-      final pendingTasks = pendingBox.values.where((t) => 
-        t.dueDate.toIso8601String().split('T')[0] == plan!.date
-      ).toList();
+    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
+    final pendingTasks = pendingBox.values.where((t) => 
+      t.dueDate.toIso8601String().split('T')[0] == plan!.date
+    ).toList();
 
-      for (var task in pendingTasks) {
-        final section = plan.sections[task.prayerAnchor] ?? [];
-        // Check if task already exists (by title and anchor if no ID)
-        if (!section.any((t) => t.title == task.title)) {
-          section.add(task);
-          plan.sections[task.prayerAnchor] = section;
-        }
+    print('PlanningRepository: Merging ${pendingTasks.length} pending tasks');
+
+    for (var task in pendingTasks) {
+      final section = plan.sections[task.prayerAnchor] ?? [];
+      // Check if task already exists (by title and anchor if no ID)
+      if (!section.any((t) => t.title == task.title)) {
+        section.add(task);
+        plan.sections[task.prayerAnchor] = section;
       }
     }
     
@@ -228,6 +251,8 @@ class PlanningRepository {
       'is_high_priority': isHighPriority,
     };
 
+    print('PlanningRepository: createTask $taskData');
+
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/tasks'),
@@ -239,6 +264,8 @@ class PlanningRepository {
         body: jsonEncode(taskData),
       );
 
+      print('PlanningRepository: createTask API Response Status: ${response.statusCode}');
+
       if (response.statusCode == 201 || response.statusCode == 210) {
         final data = jsonDecode(response.body)['data'];
         final task = Task.fromJson(data);
@@ -246,13 +273,17 @@ class PlanningRepository {
         final box = await Hive.openBox<DayPlan>(planBoxName);
         await box.delete(dueDate.toIso8601String().split('T')[0]);
         
+        print('PlanningRepository: Task created successfully on server: ${task.id}');
         return task;
+      } else {
+        print('PlanningRepository: createTask API Error: ${response.body}');
       }
     } catch (e) {
-      print('Offline: Saving task to pending queue');
+      print('PlanningRepository: createTask Network error: $e');
     }
 
     // Offline or Error: Save to pending tasks
+    print('PlanningRepository: Saving task to pending queue locally');
     final pendingTask = Task(
       title: title,
       prayerAnchor: prayerAnchor,
@@ -271,7 +302,7 @@ class PlanningRepository {
     final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
     if (pendingBox.isEmpty) return;
 
-    print('Syncing ${pendingBox.length} pending tasks...');
+    print('PlanningRepository: Syncing ${pendingBox.length} pending tasks...');
     final tasks = List<Task>.from(pendingBox.values);
     
     for (int i = 0; i < tasks.length; i++) {
@@ -293,12 +324,17 @@ class PlanningRepository {
           }),
         ).timeout(const Duration(seconds: 5));
 
+        print('PlanningRepository: syncPendingTasks [${task.title}] Status: ${response.statusCode}');
+
         if (response.statusCode == 201 || response.statusCode == 210) {
-          await pendingBox.deleteAt(0); // Delete the first one as we are iterating a copy
-          print('Synced task: ${task.title}');
+          await pendingBox.deleteAt(0); 
+          print('PlanningRepository: Synced task: ${task.title}');
+        } else {
+          print('PlanningRepository: Sync failed for ${task.title}: ${response.body}');
+          break; // Stop syncing if server error
         }
       } catch (e) {
-        print('Failed to sync task: ${task.title}. Error: $e');
+        print('PlanningRepository: Sync network error for ${task.title}: $e');
         break; // Stop syncing if network error
       }
     }
