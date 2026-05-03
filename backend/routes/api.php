@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\V1\PlanningController;
+use App\Http\Controllers\Api\V1\JournalController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -20,6 +21,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tasks', [PlanningController::class, 'storeTask']);
         Route::patch('/tasks/{task}/toggle', [PlanningController::class, 'toggleTask']);
         Route::post('/tasks/template/toggle', [PlanningController::class, 'toggleTemplateTask']);
+
+        Route::get('/journal', [JournalController::class, 'index']);
+        Route::post('/journal', [JournalController::class, 'store']);
+        Route::get('/journal/prompt', [JournalController::class, 'getPrompt']);
+        Route::get('/journal/{date}', [JournalController::class, 'show']);
+        Route::delete('/journal/delete/{journalEntry}', [JournalController::class, 'destroy']);
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);
