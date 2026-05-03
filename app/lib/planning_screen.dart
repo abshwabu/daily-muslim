@@ -272,14 +272,6 @@ class _PlanningScreenState extends State<PlanningScreen> {
     }
   }
 
-  void _onNavTap(String label) {
-    if (label == 'Home') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     const backgroundColor = Color(0xFFFBF9F4);
@@ -339,7 +331,6 @@ class _PlanningScreenState extends State<PlanningScreen> {
               ],
             ),
           ),
-          _buildBottomNavBar(),
         ],
       ),
     );
@@ -998,77 +989,6 @@ class _PlanningScreenState extends State<PlanningScreen> {
         fontWeight: FontWeight.w800,
         letterSpacing: 2.0,
         color: const Color(0xFF5E6059),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return Positioned(
-      bottom: 24,
-      left: 20,
-      right: 20,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(100),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(100),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF31332E).withOpacity(0.06),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home_outlined, 'Home', false, () => _onNavTap('Home')),
-                _buildNavItem(Icons.event_note, 'Plan', true, () => _onNavTap('Plan')),
-                _buildNavItem(Icons.auto_stories_outlined, 'Journal', false, () => _onNavTap('Journal')),
-                _buildNavItem(Icons.person_outline, 'Me', false, () => _onNavTap('Me')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFD7E7D6).withOpacity(0.5) : Colors.transparent,
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? const Color(0xFF354337) : const Color(0xFFB2B2AB),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label.toUpperCase(),
-              style: GoogleFonts.manrope(
-                fontSize: 8,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.0,
-                color: isActive ? const Color(0xFF354337) : const Color(0xFFB2B2AB),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
