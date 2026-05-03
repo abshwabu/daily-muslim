@@ -114,4 +114,74 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
   }
+
+  static Future<Map<String, dynamic>> getJournalPrompt() async {
+    final token = await getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/journal/prompt'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> getJournalEntries() async {
+    final token = await getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/journal'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> getJournalEntry(String date) async {
+    final token = await getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/v1/journal/$date'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> saveJournalEntry({
+    required String content,
+    required String date,
+    String? prompt,
+  }) async {
+    final token = await getToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/journal'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'content': content,
+        'date': date,
+        'prompt': prompt,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> deleteJournalEntry(int id) async {
+    final token = await getToken();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/v1/journal/delete/$id'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return _handleResponse(response);
+  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 import 'planning_screen.dart';
+import 'journal_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,7 +18,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const PlanningScreen(),
-    const Center(child: Text('Journal Screen')),
+    const JournalScreen(),
     const Center(child: Text('Me Screen')),
   ];
 
