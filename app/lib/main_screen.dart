@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 import 'planning_screen.dart';
 import 'journal_screen.dart';
+import 'me_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,7 +20,7 @@ class _MainScreenState extends State<MainScreen> {
     const HomeScreen(),
     const PlanningScreen(),
     const JournalScreen(),
-    const Center(child: Text('Me Screen')),
+    const MeScreen(),
   ];
 
   void _onNavTap(int index) {

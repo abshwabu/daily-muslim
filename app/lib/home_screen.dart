@@ -16,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _prayerTimes;
+  Map<String, dynamic>? _user;
   bool _isLoading = true;
   String _nextPrayerName = '...';
   String _nextPrayerTime = '';
@@ -41,12 +42,26 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       return;
     }
+    _fetchUserData();
     _fetchPrayerTimes();
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_prayerTimes != null) {
         _calculateNextPrayer();
       }
     });
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      final result = await ApiService.getUser();
+      if (result['success']) {
+        setState(() {
+          _user = result['data'];
+        });
+      }
+    } catch (e) {
+      // Ignore error for user data in home screen
+    }
   }
 
   @override
@@ -343,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const TextSpan(text: 'Welcome back,\n'),
               TextSpan(
-                text: 'User',
+                text: _user?['name'] ?? 'User',
                 style: GoogleFonts.manrope(
                   fontWeight: FontWeight.bold,
                   color: const Color(0xFF546356),

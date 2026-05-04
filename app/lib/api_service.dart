@@ -184,4 +184,29 @@ class ApiService {
     );
     return _handleResponse(response);
   }
+
+  static Future<Map<String, dynamic>> getUser() async {
+    final token = await getToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/user'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<void> logout() async {
+    final token = await getToken();
+    await http.post(
+      Uri.parse('$baseUrl/logout'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+  }
 }
