@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/user/settings', [AuthController::class, 'updateSettings']);
     Route::get('/user', function (Request $request) {
         return $request->user()->loadCount(['tasks', 'journalEntries']);
     });

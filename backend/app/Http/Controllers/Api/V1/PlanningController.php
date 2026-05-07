@@ -19,10 +19,10 @@ class PlanningController extends Controller
         $date = $date ? Carbon::parse($date) : Carbon::today();
         $user = $request->user();
 
-        // Default to a known city if not provided, or handle user preferences
-        $city = $request->input('city', 'Addis Ababa'); 
+        // Use user preferences or defaults
+        $city = $user->city ?? $request->input('city', 'Addis Ababa'); 
         $country = $request->input('country', 'Ethiopia');
-        $method = $request->input('method', 3); // MWL
+        $method = $user->prayer_method ?? $request->input('method', 3); // MWL
 
         // Fetch Prayer Times (Local-first logic on client will cache this)
         $prayerResponse = Http::get("http://api.aladhan.com/v1/timingsByCity", [

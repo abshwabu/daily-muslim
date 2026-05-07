@@ -64,4 +64,20 @@ class AuthController extends Controller
             'message' => 'Successfully logged out',
         ]);
     }
+
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'city' => 'sometimes|string|max:255',
+            'prayer_method' => 'sometimes|integer',
+        ]);
+
+        $user = $request->user();
+        $user->update($request->only(['city', 'prayer_method']));
+
+        return response()->json([
+            'message' => 'Settings updated successfully',
+            'user' => $user,
+        ]);
+    }
 }
