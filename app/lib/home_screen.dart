@@ -42,8 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       return;
     }
-    _fetchUserData();
-    _fetchPrayerTimes();
+    await _fetchUserData();
+    await _fetchPrayerTimes();
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_prayerTimes != null) {
         _calculateNextPrayer();
@@ -72,7 +72,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchPrayerTimes() async {
     try {
-      final result = await ApiService.getPrayerTimes(city: 'Addis Ababa', method: 3);
+      final city = _user?['city'] ?? 'Addis Ababa';
+      final method = _user?['prayer_method'] ?? 3;
+      final result = await ApiService.getPrayerTimes(city: city, method: method);
       if (result['success']) {
         setState(() {
           _prayerTimes = result['data']['data']['timings'];

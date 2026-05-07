@@ -4,7 +4,7 @@ import 'package:hive/hive.dart';
 import 'models.dart';
 
 class PlanningRepository {
-  static const String baseUrl = 'http://localhost:8000/api/v1';
+  static const String baseUrl = 'http://192.168.1.7:8000/api/v1';
   static const String planBoxName = 'dayPlanBox';
   static const String templateBoxName = 'taskTemplateBox';
   static const String pendingTasksBoxName = 'pendingTasksBox';

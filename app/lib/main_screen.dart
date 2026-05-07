@@ -15,18 +15,35 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  final GlobalKey<HomeScreenState> _homeKey = GlobalKey();
+  final GlobalKey<PlanningScreenState> _planningKey = GlobalKey();
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const PlanningScreen(),
-    const JournalScreen(),
-    const MeScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      HomeScreen(key: _homeKey),
+      PlanningScreen(key: _planningKey),
+      const JournalScreen(),
+      const MeScreen(),
+    ];
+  }
 
   void _onNavTap(int index) {
+    if (_currentIndex == index) return;
+    
     setState(() {
       _currentIndex = index;
     });
+
+    // Refresh data when switching back to Home or Plan
+    if (index == 0) {
+      _homeKey.currentState?.refreshData();
+    } else if (index == 1) {
+      _planningKey.currentState?.refreshData();
+    }
   }
 
   @override

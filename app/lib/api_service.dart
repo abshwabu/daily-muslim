@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8000/api';
+  static const String baseUrl = 'http://192.168.1.7:8000/api';
 
   static Future<Map<String, dynamic>> register({
     required String name,
@@ -86,6 +87,79 @@ class ApiService {
       }
       return {'success': false, 'message': 'Network error and no cached data'};
     }
+  }
+
+  static Future<Map<String, dynamic>> updateSettings({
+    String? city,
+    int? prayerMethod,
+  }) async {
+    final token = await getToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/settings'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        if (city != null) 'city': city,
+        if (prayerMethod != null) 'prayer_method': prayerMethod,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<Map<String, dynamic>> getPrayerMethods() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/prayer-methods'),
+      headers: {'Accept': 'application/json'},
+    );
+    return _handleResponse(response);
+  }
+
+  static Future<List<String>> searchCities(String query) async {
+    if (query.length < 3) return [];
+    try {
+      debugPrint('Searching for city: $query');
+      
+      // Photon API requires a User-Agent header to avoid 403 Forbidden errors
+      final response = await http.get(
+        Uri.parse('https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=10&osm_tag=place:city&osm_tag=place:town'),
+        headers: {
+          'User-Agent': 'DailyMuslimApp/1.0',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 5));
+      
+      debugPrint('Photon API Response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List features = data['features'];
+        debugPrint('Found ${features.length} city features');
+        
+        final List<String> results = [];
+        for (var feature in features) {
+          final properties = feature['properties'];
+          final name = properties['name'] ?? '';
+          final state = properties['state'] ?? '';
+          final country = properties['country'] ?? '';
+          
+          if (name.isNotEmpty) {
+            String fullName = name;
+            if (state.isNotEmpty) fullName += ', $state';
+            if (country.isNotEmpty) fullName += ', $country';
+            results.add(fullName);
+          }
+        }
+        return results.toSet().toList(); // Remove duplicates
+      } else {
+        debugPrint('Photon API Error: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('Error searching cities: $e');
+    }
+    return [];
   }
 
   static Map<String, dynamic> _handleResponse(http.Response response) {
