@@ -14,10 +14,10 @@ class PlanningScreen extends StatefulWidget {
   const PlanningScreen({super.key});
 
   @override
-  State<PlanningScreen> createState() => _PlanningScreenState();
+  State<PlanningScreen> createState() => PlanningScreenState();
 }
 
-class _PlanningScreenState extends State<PlanningScreen> {
+class PlanningScreenState extends State<PlanningScreen> {
   late PlanningRepository _repository;
   models.DayPlan? _dayPlan;
   bool _isLoading = true;
@@ -195,6 +195,10 @@ class _PlanningScreenState extends State<PlanningScreen> {
     }
 
     _repository = PlanningRepository(authToken: token);
+    _fetchDayPlan();
+  }
+
+  Future<void> refreshData() async {
     _fetchDayPlan();
   }
 

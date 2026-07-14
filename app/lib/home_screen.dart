@@ -11,10 +11,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _prayerTimes;
   Map<String, dynamic>? _user;
   bool _isLoading = true;
@@ -42,13 +42,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       return;
     }
-    await _fetchUserData();
-    await _fetchPrayerTimes();
+    await refreshData();
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_prayerTimes != null) {
         _calculateNextPrayer();
       }
     });
+  }
+
+  Future<void> refreshData() async {
+    await _fetchUserData();
+    await _fetchPrayerTimes();
   }
 
   Future<void> _fetchUserData() async {
