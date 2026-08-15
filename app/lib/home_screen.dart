@@ -1,13 +1,17 @@
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'api_service.dart';
 import 'package:intl/intl.dart';
-import 'planning_screen.dart';
+import 'api_service.dart';
+import 'prayer_service.dart';
+import 'journal_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final Function(int index)? onNavigateTab;
+
+  const HomeScreen({super.key, this.onNavigateTab});
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -24,6 +28,46 @@ class HomeScreenState extends State<HomeScreen> {
   Duration _timeUntilNext = Duration.zero;
   double _prayerProgress = 0.0;
   Timer? _timer;
+
+  // Interactive Dhikr State
+  int _dhikrCount = 0;
+  int _dhikrTargetIndex = 0;
+  final List<Map<String, dynamic>> _dhikrItems = [
+    {'title': 'SUBHANALLAH', 'target': 33, 'meaning': 'Glory be to Allah'},
+    {'title': 'ALHAMDULILLAH', 'target': 33, 'meaning': 'Praise be to Allah'},
+    {'title': 'ALLAHU AKBAR', 'target': 33, 'meaning': 'Allah is the Greatest'},
+    {'title': 'ASTAGHFIRULLAH', 'target': 33, 'meaning': 'I seek forgiveness from Allah'},
+    {'title': 'LA ILAHA ILLA ALLAH', 'target': 33, 'meaning': 'There is no god but Allah'},
+  ];
+
+  // Interactive Daily Verse State
+  int _verseIndex = 0;
+  final List<Map<String, String>> _verses = [
+    {
+      'text': '"Verily, with every hardship comes ease."',
+      'ref': 'Surah Ash-Sharh 94:6'
+    },
+    {
+      'text': '"So remember Me; I will remember you."',
+      'ref': 'Surah Al-Baqarah 2:152'
+    },
+    {
+      'text': '"Call upon Me; I will respond to you."',
+      'ref': 'Surah Ghafir 40:60'
+    },
+    {
+      'text': '"Unquestionably, by the remembrance of Allah hearts find rest."',
+      'ref': 'Surah Ar-Ra\'d 13:28'
+    },
+    {
+      'text': '"And He found you lost and guided you."',
+      'ref': 'Surah Ad-Duha 93:7'
+    },
+    {
+      'text': '"Patience and prayer are your best helpers."',
+      'ref': 'Surah Al-Baqarah 2:45'
+    },
+  ];
 
   @override
   void initState() {
@@ -53,9 +97,7 @@ class HomeScreenState extends State<HomeScreen> {
           _user = result['data'];
         });
       }
-    } catch (e) {
-      // Ignore error for user data in home screen
-    }
+    } catch (_) {}
   }
 
   @override
@@ -66,7 +108,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchPrayerTimes() async {
     try {
-      final city = _user?['city'] ?? 'Addis Ababa';
+      final city = _user?['city'] ?? 'Addis Ababa, Ethiopia';
       final method = _user?['prayer_method'] ?? 3;
       final result = await ApiService.getPrayerTimes(city: city, method: method);
       if (result['success']) {
@@ -76,20 +118,10 @@ class HomeScreenState extends State<HomeScreen> {
         });
         _calculateNextPrayer();
       } else {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result['message'] ?? 'Failed to fetch prayer times')),
-          );
-        }
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Network error. Using offline mode if available.')),
-        );
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -106,7 +138,6 @@ class HomeScreenState extends State<HomeScreen> {
     for (int i = 0; i < prayers.length; i++) {
       final name = prayers[i];
       final timeStr = _prayerTimes![name];
-      // Use regex to extract only HH:mm
       final timeMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(timeStr);
       if (timeMatch == null) continue;
       
@@ -119,7 +150,6 @@ class HomeScreenState extends State<HomeScreen> {
         nextName = name;
         
         if (i == 0) {
-          // Next is Fajr, previous was Isha yesterday
           final ishaTimeStr = _prayerTimes!['Isha'];
           final ishaMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(ishaTimeStr);
           if (ishaMatch != null) {
@@ -142,7 +172,6 @@ class HomeScreenState extends State<HomeScreen> {
     }
 
     if (nextPrayerTime == null) {
-      // All prayers passed today, next is Fajr tomorrow
       nextName = 'Fajr';
       final fajrTimeStr = _prayerTimes!['Fajr'];
       final fajrMatch = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(fajrTimeStr);
@@ -165,7 +194,6 @@ class HomeScreenState extends State<HomeScreen> {
       final total = nextPrayerTime.difference(prevPrayerTime).inSeconds;
       final elapsed = now.difference(prevPrayerTime).inSeconds;
       
-      // Determine previous prayer name
       String prevName = '';
       if (nextName == 'Fajr') {
         prevName = 'Isha';
@@ -174,7 +202,6 @@ class HomeScreenState extends State<HomeScreen> {
         prevName = prayers[nextIndex - 1];
       }
 
-      // Extract clean HH:mm for display
       String cleanTime(String raw) {
         final m = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(raw);
         return m != null ? m.group(0)! : raw;
@@ -196,6 +223,266 @@ class HomeScreenState extends State<HomeScreen> {
       return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
     }
     return '${d.inMinutes} mins';
+  }
+
+  void _incrementDhikr() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _dhikrCount++;
+      final currentTarget = _dhikrItems[_dhikrTargetIndex]['target'] as int;
+      if (_dhikrCount >= currentTarget) {
+        _dhikrCount = 0;
+        _dhikrTargetIndex = (_dhikrTargetIndex + 1) % _dhikrItems.length;
+        HapticFeedback.vibrate();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Completed! Next: ${_dhikrItems[_dhikrTargetIndex]['title']}'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF546356),
+          ),
+        );
+      }
+    });
+  }
+
+  void _resetDhikr() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _dhikrCount = 0;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Dhikr counter reset'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _nextVerse() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _verseIndex = (_verseIndex + 1) % _verses.length;
+    });
+  }
+
+  void _copyVerse() {
+    final v = _verses[_verseIndex];
+    Clipboard.setData(ClipboardData(text: '${v['text']} - ${v['ref']}'));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Verse copied to clipboard'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Color(0xFF546356),
+      ),
+    );
+  }
+
+  void _showQiblaSheet() {
+    final cityName = _user?['city'] ?? 'Addis Ababa, Ethiopia';
+    final cityLoc = PrayerService.findCity(cityName);
+    final bearing = PrayerService.calculateQiblaBearing(cityLoc.latitude, cityLoc.longitude);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3E3DB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'QIBLA DIRECTION',
+              style: GoogleFonts.manrope(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2.0,
+                color: const Color(0xFF5E6059),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              cityName,
+              style: GoogleFonts.manrope(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF31332E),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF5F4ED),
+                border: Border.all(color: const Color(0xFF546356), width: 3),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Transform.rotate(
+                    angle: (bearing * 3.141592653589793) / 180.0,
+                    child: const Icon(Icons.navigation, size: 64, color: Color(0xFF546356)),
+                  ),
+                  const Positioned(
+                    top: 10,
+                    child: Text('N', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF5E6059))),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              '${bearing.toStringAsFixed(1)}° from North',
+              style: GoogleFonts.manrope(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF546356),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Point top of phone toward the arrow direction',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.manrope(
+                fontSize: 13,
+                color: const Color(0xFF5E6059),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPrayerDetails(String name, String time) {
+    Map<String, String> details = {
+      'Fajr': '2 Rak\'ats Fard • 2 Rak\'ats Sunnah before',
+      'Dhuhr': '4 Rak\'ats Fard • 4 Sunnah before, 2 Sunnah after',
+      'Asr': '4 Rak\'ats Fard • 4 Sunnah before (optional)',
+      'Maghrib': '3 Rak\'ats Fard • 2 Sunnah after',
+      'Isha': '4 Rak\'ats Fard • 2 Sunnah after, 3 Witr',
+    };
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3E3DB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  name.toUpperCase(),
+                  style: GoogleFonts.manrope(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF546356),
+                  ),
+                ),
+                Text(
+                  time,
+                  style: GoogleFonts.manrope(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w300,
+                    color: const Color(0xFF31332E),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              details[name] ?? 'Daily Obligatory Prayer',
+              style: GoogleFonts.manrope(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF5E6059),
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF546356),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                ),
+                child: Text('CLOSE', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editUserName() async {
+    final nameController = TextEditingController(text: _user?['name'] ?? 'Muslim');
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Edit Name', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Enter your name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, nameController.text.trim()),
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      await ApiService.updateSettings(name: newName);
+      refreshData();
+    }
+  }
+
+  void _showQuickSettings() {
+    widget.onNavigateTab?.call(3); // Navigate to Me/Settings tab
   }
 
   @override
@@ -300,25 +587,34 @@ class HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFFE3E3DB),
-                ),
-                child: const Icon(Icons.person_outline, color: Color(0xFF546356)),
-              ),
-              Text(
-                'THE SACRED PAUSE',
-                style: GoogleFonts.manrope(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 2.0,
-                  color: const Color(0xFF31332E),
+              GestureDetector(
+                onTap: () => widget.onNavigateTab?.call(3),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFE3E3DB),
+                  ),
+                  child: const Icon(Icons.person_outline, color: Color(0xFF546356)),
                 ),
               ),
-              const Icon(Icons.settings_outlined, color: Color(0xFF31332E), size: 24),
+              GestureDetector(
+                onTap: refreshData,
+                child: Text(
+                  'THE SACRED PAUSE',
+                  style: GoogleFonts.manrope(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2.0,
+                    color: const Color(0xFF31332E),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _showQuickSettings,
+                icon: const Icon(Icons.settings_outlined, color: Color(0xFF31332E), size: 24),
+              ),
             ],
           ),
         ),
@@ -343,24 +639,27 @@ class HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        RichText(
-          text: TextSpan(
-            style: GoogleFonts.manrope(
-              fontSize: 36,
-              fontWeight: FontWeight.w200,
-              height: 1.1,
-              color: const Color(0xFF31332E),
-            ),
-            children: [
-              const TextSpan(text: 'Welcome back,\n'),
-              TextSpan(
-                text: _user?['name'] ?? 'User',
-                style: GoogleFonts.manrope(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF546356),
-                ),
+        GestureDetector(
+          onTap: _editUserName,
+          child: RichText(
+            text: TextSpan(
+              style: GoogleFonts.manrope(
+                fontSize: 36,
+                fontWeight: FontWeight.w200,
+                height: 1.1,
+                color: const Color(0xFF31332E),
               ),
-            ],
+              children: [
+                const TextSpan(text: 'Welcome back,\n'),
+                TextSpan(
+                  text: '${_user?['name'] ?? 'User'} ✏️',
+                  style: GoogleFonts.manrope(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF546356),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -368,105 +667,108 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPrayerPulse() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 0.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF31332E).withOpacity(0.06),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
+    return GestureDetector(
+      onTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.5),
+                width: 0.5,
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Text(
-                'NEXT PRAYER',
-                style: GoogleFonts.manrope(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: const Color(0xFF5E6059),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF31332E).withOpacity(0.06),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
                 ),
-              ),
-              const SizedBox(height: 12),
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
+              ],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'NEXT PRAYER',
                   style: GoogleFonts.manrope(
-                    fontSize: 48,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: -1.5,
-                    color: const Color(0xFF546356),
+                    letterSpacing: 1.5,
+                    color: const Color(0xFF5E6059),
                   ),
+                ),
+                const SizedBox(height: 12),
+                RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: GoogleFonts.manrope(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -1.5,
+                      color: const Color(0xFF546356),
+                    ),
+                    children: [
+                      TextSpan(text: '$_nextPrayerName '),
+                      TextSpan(
+                        text: 'in ${_formatDuration(_timeUntilNext)}',
+                        style: GoogleFonts.manrope(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w300,
+                          color: const Color(0xFF5E6059),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Container(
+                  height: 6,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFEEE7),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: _prayerProgress,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF546356),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    TextSpan(text: '$_nextPrayerName '),
-                    TextSpan(
-                      text: 'in ${_formatDuration(_timeUntilNext)}',
+                    Text(
+                      '${_prevPrayerName.toUpperCase()} $_prevPrayerTime',
                       style: GoogleFonts.manrope(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w300,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                        color: const Color(0xFF5E6059),
+                      ),
+                    ),
+                    Text(
+                      '${_nextPrayerName.toUpperCase()} $_nextPrayerTime',
+                      style: GoogleFonts.manrope(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
                         color: const Color(0xFF5E6059),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 32),
-              Container(
-                height: 6,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFEEE7),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: _prayerProgress,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF546356),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${_prevPrayerName.toUpperCase()} $_prevPrayerTime',
-                    style: GoogleFonts.manrope(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                      color: const Color(0xFF5E6059),
-                    ),
-                  ),
-                  Text(
-                    '${_nextPrayerName.toUpperCase()} $_nextPrayerTime',
-                    style: GoogleFonts.manrope(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                      color: const Color(0xFF5E6059),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -489,12 +791,21 @@ class HomeScreenState extends State<HomeScreen> {
                 color: const Color(0xFF31332E),
               ),
             ),
-            Text(
-              'View Qibla',
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF546356),
+            GestureDetector(
+              onTap: _showQiblaSheet,
+              child: Row(
+                children: [
+                  const Icon(Icons.explore_outlined, size: 16, color: Color(0xFF546356)),
+                  const SizedBox(width: 4),
+                  Text(
+                    'View Qibla',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF546356),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -530,154 +841,199 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPrayerCard(String name, String time, IconData icon, bool isActive) {
-    return Container(
-      width: 112,
-      height: 148,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isActive ? null : const Color(0xFFF5F4ED),
-        gradient: isActive
-            ? const LinearGradient(
-                colors: [Color(0xFF546356), Color(0xFF48574A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF546356).withOpacity(0.2),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
+    return GestureDetector(
+      onTap: () => _showPrayerDetails(name, time),
+      child: Container(
+        width: 112,
+        height: 148,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isActive ? null : const Color(0xFFF5F4ED),
+          gradient: isActive
+              ? const LinearGradient(
+                  colors: [Color(0xFF546356), Color(0xFF48574A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF546356).withOpacity(0.2),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : [],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? Colors.white : const Color(0xFF5E6059),
+              size: 24,
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.toUpperCase(),
+                  style: GoogleFonts.manrope(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: isActive ? Colors.white.withOpacity(0.8) : const Color(0xFF5E6059),
+                  ),
                 ),
-              ]
-            : [],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(
-            icon,
-            color: isActive ? Colors.white : const Color(0xFF5E6059),
-            size: 24,
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name.toUpperCase(),
-                style: GoogleFonts.manrope(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: isActive ? Colors.white.withOpacity(0.8) : const Color(0xFF5E6059),
+                Text(
+                  time,
+                  style: GoogleFonts.manrope(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isActive ? Colors.white : const Color(0xFF31332E),
+                  ),
                 ),
-              ),
-              Text(
-                time,
-                style: GoogleFonts.manrope(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isActive ? Colors.white : const Color(0xFF31332E),
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildReflectionGrid() {
+    final v = _verses[_verseIndex];
+    final dhikr = _dhikrItems[_dhikrTargetIndex];
+
     return Column(
       children: [
-        _buildBentoCard(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'DAILY VERSE',
-                      style: GoogleFonts.manrope(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                        color: const Color(0xFF5E6059),
+        GestureDetector(
+          onTap: _nextVerse,
+          onLongPress: _copyVerse,
+          child: _buildBentoCard(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'DAILY VERSE',
+                            style: GoogleFonts.manrope(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                              color: const Color(0xFF5E6059),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '• TAP FOR NEXT',
+                            style: GoogleFonts.manrope(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF546356),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '"Verily, with every hardship comes ease."',
-                      style: GoogleFonts.manrope(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FontStyle.italic,
-                        height: 1.5,
-                        color: const Color(0xFF31332E),
+                      const SizedBox(height: 8),
+                      Text(
+                        v['text']!,
+                        style: GoogleFonts.manrope(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          fontStyle: FontStyle.italic,
+                          height: 1.5,
+                          color: const Color(0xFF31332E),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        v['ref']!,
+                        style: GoogleFonts.manrope(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF546356),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD7E7D6),
-                  shape: BoxShape.circle,
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFD7E7D6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.menu_book, color: Color(0xFF546356), size: 24),
                 ),
-                child: const Icon(Icons.menu_book, color: Color(0xFF546356), size: 24),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
-              child: _buildSimpleBentoCard(
-                icon: Icons.radio_button_checked,
-                title: 'DHIKR',
-                content: Column(
-                  children: [
-                    Text(
-                      '33',
-                      style: GoogleFonts.manrope(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF31332E),
+              child: GestureDetector(
+                onTap: _incrementDhikr,
+                onLongPress: _resetDhikr,
+                child: _buildSimpleBentoCard(
+                  icon: Icons.touch_app,
+                  title: 'DHIKR TAP',
+                  content: Column(
+                    children: [
+                      Text(
+                        '$_dhikrCount / ${dhikr['target']}',
+                        style: GoogleFonts.manrope(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF31332E),
+                        ),
                       ),
-                    ),
-                    Text(
-                      'SUBHANALLAH',
-                      style: GoogleFonts.manrope(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                        color: const Color(0xFF5E6059),
+                      Text(
+                        dhikr['title'] as String,
+                        style: GoogleFonts.manrope(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                          color: const Color(0xFF546356),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: _buildSimpleBentoCard(
-                icon: Icons.self_improvement,
-                title: 'JOURNAL',
-                content: Text(
-                  'Write your morning reflection',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF5E6059),
+              child: GestureDetector(
+                onTap: () => widget.onNavigateTab?.call(2),
+                child: _buildSimpleBentoCard(
+                  icon: Icons.edit_note,
+                  title: 'JOURNAL',
+                  content: Column(
+                    children: [
+                      const Icon(Icons.auto_stories, color: Color(0xFF546356), size: 24),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Write reflection',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.manrope(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF5E6059),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

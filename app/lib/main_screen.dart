@@ -24,7 +24,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _screens = [
-      HomeScreen(key: _homeKey),
+      HomeScreen(key: _homeKey, onNavigateTab: _onNavTap),
       PlanningScreen(key: _planningKey),
       const JournalScreen(),
       const MeScreen(),

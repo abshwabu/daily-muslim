@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
 
@@ -157,6 +158,21 @@ class PrayerService {
             c.country.toLowerCase().contains(search))
         .map((c) => c.fullName)
         .toList();
+  }
+
+  static double calculateQiblaBearing(double latitude, double longitude) {
+    const meccaLat = 21.4225 * math.pi / 180.0;
+    const meccaLng = 39.8262 * math.pi / 180.0;
+    
+    final userLat = latitude * math.pi / 180.0;
+    final userLng = longitude * math.pi / 180.0;
+    
+    final dLng = meccaLng - userLng;
+    final y = math.sin(dLng);
+    final x = math.cos(userLat) * math.tan(meccaLat) - math.sin(userLat) * math.cos(dLng);
+    
+    double qibla = math.atan2(y, x) * 180.0 / math.pi;
+    return (qibla + 360.0) % 360.0;
   }
 }
 
