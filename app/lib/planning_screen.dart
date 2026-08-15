@@ -414,7 +414,7 @@ class PlanningScreenState extends State<PlanningScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'THE SACRED PAUSE',
+                    'SAKINAH',
                     style: GoogleFonts.manrope(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,

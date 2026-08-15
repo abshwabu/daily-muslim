@@ -602,7 +602,7 @@ class HomeScreenState extends State<HomeScreen> {
               GestureDetector(
                 onTap: refreshData,
                 child: Text(
-                  'THE SACRED PAUSE',
+                  'SAKINAH',
                   style: GoogleFonts.manrope(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

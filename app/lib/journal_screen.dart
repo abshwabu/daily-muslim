@@ -346,7 +346,7 @@ class _JournalScreenState extends State<JournalScreen> {
                 child: const Icon(Icons.person_outline, color: Color(0xFF546356), size: 20),
               ),
               Text(
-                'THE SACRED PAUSE',
+                'SAKINAH',
                 style: GoogleFonts.manrope(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
