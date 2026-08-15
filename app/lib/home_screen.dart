@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
 import 'planning_screen.dart';
-import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,19 +28,10 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    _initData();
   }
 
-  Future<void> _checkAuth() async {
-    final token = await ApiService.getToken();
-    if (token == null) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-      return;
-    }
+  Future<void> _initData() async {
     await refreshData();
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (_prayerTimes != null) {

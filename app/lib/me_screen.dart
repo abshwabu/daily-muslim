@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
-import 'login_screen.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -50,7 +49,7 @@ class _MeScreenState extends State<MeScreen> {
       final result = await ApiService.getPrayerMethods();
       if (result['success']) {
         setState(() {
-          _prayerMethods = (result['data']['data'] as Map).values.toList();
+          _prayerMethods = result['data']['data'] as List;
         });
       }
     } catch (e) {
@@ -59,12 +58,41 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   String _getPrayerMethodName(int id) {
-    if (_prayerMethods.isEmpty) return 'Loading...';
+    if (_prayerMethods.isEmpty) return 'MWL (Standard)';
     final method = _prayerMethods.firstWhere(
       (m) => m['id'] == id,
       orElse: () => null,
     );
-    return method?['name'] ?? 'Custom';
+    return method?['name'] ?? 'Muslim World League';
+  }
+
+  Future<void> _editName() async {
+    final nameController = TextEditingController(text: _user?['name'] ?? 'Muslim');
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Edit Name', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Enter your name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, nameController.text.trim()),
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      await ApiService.updateSettings(name: newName);
+      _fetchUserData();
+    }
   }
 
   Future<void> _updateCity() async {
@@ -155,65 +183,10 @@ class _MeScreenState extends State<MeScreen> {
     }
   }
 
-  Future<void> _handleLogout() async {
-    showDialog(
-      context: context,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: AlertDialog(
-          backgroundColor: Colors.white.withOpacity(0.9),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text(
-            'LOGOUT',
-            style: GoogleFonts.manrope(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
-              color: const Color(0xFF31332E),
-            ),
-          ),
-          content: Text(
-            'Are you sure you want to leave the sanctuary?',
-            style: GoogleFonts.manrope(
-              fontSize: 16,
-              color: const Color(0xFF5E6059),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'CANCEL',
-                style: GoogleFonts.manrope(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5E6059),
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                await ApiService.logout();
-                if (mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-              child: Text(
-                'LOGOUT',
-                style: GoogleFonts.manrope(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFFA73B21),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _toggleHanafi() async {
+    final currentHanafi = _user?['is_hanafi'] ?? false;
+    await ApiService.updateSettings(isHanafi: !currentHanafi);
+    _fetchUserData();
   }
 
   @override
@@ -245,7 +218,7 @@ class _MeScreenState extends State<MeScreen> {
                         const SizedBox(height: 16),
                         _buildSettingsList(),
                         const SizedBox(height: 48),
-                        _buildLogoutButton(),
+                        _buildOfflineStatusBanner(),
                         const SizedBox(height: 120),
                       ],
                     ),
@@ -305,55 +278,67 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Widget _buildProfileCard() {
-    return ClipRRect(
+    return InkWell(
+      onTap: _editName,
       borderRadius: BorderRadius.circular(32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 0.5,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.5),
+                width: 0.5,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFFE3E3DB),
+            child: Row(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFE3E3DB),
+                  ),
+                  child: const Icon(Icons.person_outline, color: Color(0xFF546356), size: 40),
                 ),
-                child: const Icon(Icons.person_outline, color: Color(0xFF546356), size: 40),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _user?['name'] ?? 'Guest User',
-                      style: GoogleFonts.manrope(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF31332E),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _user?['name'] ?? 'Muslim',
+                              style: GoogleFonts.manrope(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF31332E),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF546356)),
+                        ],
                       ),
-                    ),
-                    Text(
-                      _user?['email'] ?? 'guest@example.com',
-                      style: GoogleFonts.manrope(
-                        fontSize: 14,
-                        color: const Color(0xFF5E6059),
+                      Text(
+                        '100% Offline Sanctuary',
+                        style: GoogleFonts.manrope(
+                          fontSize: 14,
+                          color: const Color(0xFF5E6059),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -384,7 +369,7 @@ class _MeScreenState extends State<MeScreen> {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: _buildStatCard('STREAK', '0', Icons.local_fire_department),
+          child: _buildStatCard('MODE', 'Offline', Icons.wifi_off),
         ),
       ],
     );
@@ -405,7 +390,7 @@ class _MeScreenState extends State<MeScreen> {
           Text(
             value,
             style: GoogleFonts.manrope(
-              fontSize: 24,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: const Color(0xFF31332E),
             ),
@@ -425,6 +410,7 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Widget _buildSettingsList() {
+    final isHanafi = _user?['is_hanafi'] ?? false;
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF5F4ED),
@@ -435,7 +421,7 @@ class _MeScreenState extends State<MeScreen> {
           _buildSettingsItem(
             Icons.location_on_outlined, 
             'Location', 
-            _user?['city'] ?? 'Addis Ababa',
+            _user?['city'] ?? 'Addis Ababa, Ethiopia',
             onTap: _updateCity,
           ),
           _buildDivider(),
@@ -446,7 +432,12 @@ class _MeScreenState extends State<MeScreen> {
             onTap: _updatePrayerMethod,
           ),
           _buildDivider(),
-          _buildSettingsItem(Icons.notifications_none_outlined, 'Notifications', 'Enabled'),
+          _buildSettingsItem(
+            Icons.balance_outlined, 
+            'Asr Calculation (Madhab)', 
+            isHanafi ? 'Hanafi' : 'Shafi / Standard',
+            onTap: _toggleHanafi,
+          ),
         ],
       ),
     );
@@ -501,27 +492,30 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  Widget _buildLogoutButton() {
-    return GestureDetector(
-      onTap: _handleLogout,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFA73B21).withOpacity(0.2)),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Center(
-          child: Text(
-            'LOGOUT',
+  Widget _buildOfflineStatusBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD7E7D6).withOpacity(0.4),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: const Color(0xFF546356).withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off, color: Color(0xFF546356), size: 20),
+          const SizedBox(width: 12),
+          Text(
+            '100% OFFLINE MODE ACTIVE',
             style: GoogleFonts.manrope(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
-              color: const Color(0xFFA73B21),
+              letterSpacing: 1.5,
+              color: const Color(0xFF546356),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -538,42 +532,27 @@ class _CitySearchSheet extends StatefulWidget {
 class _CitySearchSheetState extends State<_CitySearchSheet> {
   final _controller = TextEditingController();
   List<String> _suggestions = [];
-  bool _isSearching = false;
-  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
     _controller.text = widget.initialCity ?? '';
+    _onSearchChanged(_controller.text);
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged(String query) {
-    if (_debounce?.isActive ?? false) _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      if (query.length < 3) {
-        setState(() {
-          _suggestions = [];
-          _isSearching = false;
-        });
-        return;
-      }
-
-      setState(() => _isSearching = true);
-      final results = await ApiService.searchCities(query);
-      if (mounted) {
-        setState(() {
-          _suggestions = results;
-          _isSearching = false;
-        });
-      }
-    });
+  void _onSearchChanged(String query) async {
+    final results = await ApiService.searchCities(query);
+    if (mounted) {
+      setState(() {
+        _suggestions = results;
+      });
+    }
   }
 
   @override
@@ -598,7 +577,7 @@ class _CitySearchSheetState extends State<_CitySearchSheet> {
           ),
           const SizedBox(height: 24),
           Text(
-            'SEARCH CITY',
+            'SELECT CITY (OFFLINE)',
             style: GoogleFonts.manrope(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -612,19 +591,9 @@ class _CitySearchSheetState extends State<_CitySearchSheet> {
             onChanged: _onSearchChanged,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Start typing city name...',
+              hintText: 'Type city name...',
               hintStyle: GoogleFonts.manrope(color: const Color(0xFFB2B2AB)),
               prefixIcon: const Icon(Icons.search, color: Color(0xFF546356)),
-              suffixIcon: _isSearching 
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF546356)),
-                      ),
-                    )
-                  : null,
               filled: true,
               fillColor: const Color(0xFFF5F4ED),
               border: OutlineInputBorder(
@@ -637,30 +606,23 @@ class _CitySearchSheetState extends State<_CitySearchSheet> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _suggestions.isEmpty && _controller.text.length >= 3 && !_isSearching
-                ? Center(
-                    child: Text(
-                      'No cities found',
-                      style: GoogleFonts.manrope(color: const Color(0xFF5E6059)),
+            child: ListView.builder(
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final city = _suggestions[index];
+                return ListTile(
+                  title: Text(
+                    city,
+                    style: GoogleFonts.manrope(
+                      color: const Color(0xFF31332E),
+                      fontWeight: FontWeight.w500,
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: _suggestions.length,
-                    itemBuilder: (context, index) {
-                      final city = _suggestions[index];
-                      return ListTile(
-                        title: Text(
-                          city,
-                          style: GoogleFonts.manrope(
-                            color: const Color(0xFF31332E),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        onTap: () => Navigator.pop(context, city),
-                        trailing: const Icon(Icons.chevron_right, color: Color(0xFFB2B2AB), size: 20),
-                      );
-                    },
                   ),
+                  onTap: () => Navigator.pop(context, city),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFB2B2AB), size: 20),
+                );
+              },
+            ),
           ),
         ],
       ),

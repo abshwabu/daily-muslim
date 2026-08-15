@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
 import 'focus_mode_screen.dart';
 import 'api_service.dart';
 import 'planning_repository.dart';
@@ -182,19 +181,7 @@ class PlanningScreenState extends State<PlanningScreen> {
   }
 
   Future<void> _initRepository() async {
-    final token = await ApiService.getToken();
-    print('Init Repository with token: ${token != null ? "Token present" : "Token NULL"}');
-    
-    if (token == null) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-      return;
-    }
-
-    _repository = PlanningRepository(authToken: token);
+    _repository = PlanningRepository();
     _fetchDayPlan();
   }
 
@@ -422,11 +409,8 @@ class PlanningScreenState extends State<PlanningScreen> {
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       color: Color(0xFFE3E3DB),
-                      image: DecorationImage(
-                        image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAZFDUOr7S3ZJE-WwRXm_QC0kxr5ER8E2674nEo_VG5FzaKU2lqa4K302WA0HlF-Ck8IXnsv_G6PxLIHUJAZuwP3JN5tuTa1_sWQhFbQkgiir-vq7OyHJAF0__WMA8E6_rkkFKBH4nbcL6ocouKpqIM_JAEuqT1wxMI3w2-Hiqzw0gyq4DL28B01Q2aV9HsMNxmAL0hJa8-RCxpFgNnGlJ3myY0zN6bZNonRGt4jgDPCuE027jnXsJnSzy_5ILV6eEc4Y03UxcpBoU'),
-                        fit: BoxFit.cover,
-                      ),
                     ),
+                    child: const Icon(Icons.person_outline, color: Color(0xFF546356), size: 18),
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -940,18 +924,14 @@ class PlanningScreenState extends State<PlanningScreen> {
           borderRadius: BorderRadius.circular(32),
           child: Stack(
             children: [
-              ColorFiltered(
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFFFBF9F4),
-                  BlendMode.multiply,
-                ),
-                child: Opacity(
-                  opacity: 0.4,
-                  child: Image.network(
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuDYr2mlaZ3e_ArpjGpLNaFXmWieM0jzgE2NOajeEabAIZs46LSYnAo6l_wiZWb1qfuhF0w9mna1zcDTJ2U-cggarTWlm1BaJ1c91M8Lzr_5z_iyMDL01MuU3KS5IuoILLNkBVL7DDX1bSHUt6cSzQ6MMN160KD41jYXS-MIHRDiZEC_sLdBbXdeqXOP1tVh8s5ZCjfKDaUwfFsSDvgFYhyL467FrrE2Sa_0niiQK6IWTMCgextGHpPgh4I0V2mw1QAt_ncSLqX8V3s',
-                    width: double.infinity,
-                    height: 160,
-                    fit: BoxFit.cover,
+              Container(
+                width: double.infinity,
+                height: 160,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFD7E7D6), Color(0xFFEBF4B3)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
               ),

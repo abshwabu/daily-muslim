@@ -1,90 +1,30 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:hive/hive.dart';
 import 'models.dart';
+import 'api_service.dart';
 
 class PlanningRepository {
-  static const String baseUrl = 'http://192.168.1.7:8000/api/v1';
   static const String planBoxName = 'dayPlanBox';
   static const String templateBoxName = 'taskTemplateBox';
-  static const String pendingTasksBoxName = 'pendingTasksBox';
 
-  final String? authToken;
-
-  PlanningRepository({this.authToken});
+  PlanningRepository({String? authToken});
 
   Future<DayPlan?> getDayPlan(DateTime date) async {
     final dateStr = date.toIso8601String().split('T')[0];
     final box = await Hive.openBox<DayPlan>(planBoxName);
 
-    print('PlanningRepository: getDayPlan for $dateStr');
-
-    // Try to sync pending tasks before fetching
-    await syncPendingTasks();
-
-    // 1. Try to Fetch from API
-    DayPlan? plan;
-    try {
-      print('PlanningRepository: Fetching from API $baseUrl/plan/$dateStr');
-      final response = await http.get(
-        Uri.parse('$baseUrl/plan/$dateStr'),
-        headers: {
-          'Authorization': 'Bearer $authToken',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 10));
-
-      print('PlanningRepository: API Response Status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        final data = jsonResponse['data'];
-
-        final Map<String, dynamic> sectionsJson = data['sections'] ?? {};
-        final Map<String, List<Task>> sections = {};
-        
-        sectionsJson.forEach((key, value) {
-          try {
-            if (value is List) {
-              sections[key] = value.map((t) => Task.fromJson(t)).toList();
-            } else {
-              sections[key] = [];
-            }
-          } catch (e) {
-            sections[key] = [];
-          }
-        });
-
-        plan = DayPlan(
-          date: dateStr,
-          prayerTimes: data['prayer_times'] ?? {},
-          sections: sections,
-          updatedAt: DateTime.now(),
-        );
-
-        // Update Local Store
-        await box.put(dateStr, plan);
-      } else {
-        print('PlanningRepository: API Error: ${response.body}');
-      }
-    } catch (e) {
-      print('PlanningRepository: Network error: $e');
-    }
-    
-    // 2. Fallback to Local Cache for THIS date
-    if (plan == null) {
-      plan = box.get(dateStr);
-      if (plan != null) {
-        print('PlanningRepository: Using cached plan for $dateStr');
-      }
+    // Calculate prayer times offline for target date
+    final prayerResult = await ApiService.getPrayerTimes(date: date);
+    Map<String, dynamic> prayerTimes = {};
+    if (prayerResult['success'] && prayerResult['data']?['data']?['timings'] != null) {
+      prayerTimes = Map<String, dynamic>.from(prayerResult['data']['data']['timings']);
     }
 
-    // 3. Create a minimal plan shell if still null (to allow merging pending tasks)
+    DayPlan? plan = box.get(dateStr);
+
     if (plan == null) {
-      print('PlanningRepository: Creating empty plan shell for $dateStr');
       plan = DayPlan(
         date: dateStr,
-        prayerTimes: {},
+        prayerTimes: prayerTimes,
         sections: {
           'fajr': [],
           'dhuhr': [],
@@ -94,249 +34,148 @@ class PlanningRepository {
         },
         updatedAt: DateTime.now(),
       );
-    }
-
-    // 4. Merge Pending Tasks into the plan
-    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
-    final pendingTasks = pendingBox.values.where((t) => 
-      t.dueDate.toIso8601String().split('T')[0] == plan!.date
-    ).toList();
-
-    print('PlanningRepository: Merging ${pendingTasks.length} pending tasks');
-
-    for (var task in pendingTasks) {
-      final section = plan.sections[task.prayerAnchor] ?? [];
-      // Check if task already exists (by title and anchor if no ID)
-      if (!section.any((t) => t.title == task.title)) {
-        section.add(task);
-        plan.sections[task.prayerAnchor] = section;
+      await box.put(dateStr, plan);
+    } else {
+      // Update prayer times if updated
+      if (prayerTimes.isNotEmpty) {
+        plan = DayPlan(
+          date: plan.date,
+          prayerTimes: prayerTimes,
+          sections: plan.sections,
+          updatedAt: DateTime.now(),
+        );
+        await box.put(dateStr, plan);
       }
     }
-    
+
     return plan;
   }
 
   Future<List<TaskTemplate>> getTaskTemplates() async {
     final box = await Hive.openBox<TaskTemplate>(templateBoxName);
-    
-    // Check if we have templates and they are not too old (7 days)
-    final settingsBox = await Hive.openBox('settings');
-    final lastUpdateStr = settingsBox.get('templates_last_update');
-    if (lastUpdateStr != null) {
-      final lastUpdate = DateTime.parse(lastUpdateStr);
-      if (DateTime.now().difference(lastUpdate).inDays < 7 && box.isNotEmpty) {
-        return box.values.toList();
-      }
+    if (box.isEmpty) {
+      final defaultTemplates = [
+        TaskTemplate(id: 1, title: 'Morning Adhkar & Surah Yasin', category: 'Spiritual', prayerAnchor: 'fajr', description: 'Begin the day in remembrance'),
+        TaskTemplate(id: 2, title: 'Quran Recitation (1 Juz)', category: 'Quran', prayerAnchor: 'dhuhr', description: 'Daily Quran reading goal'),
+        TaskTemplate(id: 3, title: 'Evening Adhkar', category: 'Spiritual', prayerAnchor: 'asr', description: 'Protective dhikr before sunset'),
+        TaskTemplate(id: 4, title: 'Family Reflection & Gratitude', category: 'Family', prayerAnchor: 'maghrib', description: 'Gather with loved ones'),
+        TaskTemplate(id: 5, title: 'Night Prayer & Witr', category: 'Spiritual', prayerAnchor: 'isha', description: 'Seal the day with prayer'),
+      ];
+      await box.addAll(defaultTemplates);
     }
-
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/templates'),
-        headers: {
-          'Authorization': 'Bearer $authToken',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body)['data'];
-        final templates = data.map((t) => TaskTemplate.fromJson(t)).toList();
-
-        await box.clear();
-        await box.addAll(templates);
-        final settingsBox = await Hive.openBox('settings');
-        await settingsBox.put('templates_last_update', DateTime.now().toIso8601String());
-
-        return templates;
-      }
-    } catch (e) {
-      if (box.isNotEmpty) return box.values.toList();
-    }
-    return [];
+    return box.values.toList();
   }
 
   Future<bool> rolloverTasks() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/tasks/rollover'),
-        headers: {
-          'Authorization': 'Bearer $authToken',
-          'Accept': 'application/json',
-        },
-      );
+    final now = DateTime.now();
+    final todayStr = now.toIso8601String().split('T')[0];
+    final yesterdayStr = now.subtract(const Duration(days: 1)).toIso8601String().split('T')[0];
 
-      if (response.statusCode == 200) {
-        final box = await Hive.openBox<DayPlan>(planBoxName);
-        await box.delete(DateTime.now().toIso8601String().split('T')[0]);
-        return true;
+    final box = await Hive.openBox<DayPlan>(planBoxName);
+    final yesterdayPlan = box.get(yesterdayStr);
+    if (yesterdayPlan == null) return false;
+
+    final todayPlan = await getDayPlan(now);
+    if (todayPlan == null) return false;
+
+    bool modified = false;
+    yesterdayPlan.sections.forEach((anchor, tasks) {
+      for (var task in tasks) {
+        if (task.isCompleted != true) {
+          final existing = todayPlan.sections[anchor] ?? [];
+          if (!existing.any((t) => t.title == task.title)) {
+            existing.add(Task(
+              id: DateTime.now().millisecondsSinceEpoch,
+              title: task.title,
+              prayerAnchor: anchor,
+              dueDate: now,
+              isCompleted: false,
+              isHighPriority: task.isHighPriority,
+              description: task.description,
+              category: task.category,
+            ));
+            todayPlan.sections[anchor] = existing;
+            modified = true;
+          }
+        }
       }
-    } catch (e) {
-      return false;
+    });
+
+    if (modified) {
+      await box.put(todayStr, todayPlan);
     }
-    return false;
+    return true;
   }
 
   Future<bool> toggleTask(Task task) async {
-    try {
-      final String url;
-      final Map<String, dynamic>? body;
-      final String method;
+    final dateStr = task.dueDate.toIso8601String().split('T')[0];
+    final box = await Hive.openBox<DayPlan>(planBoxName);
+    final plan = box.get(dateStr);
+    if (plan == null) return false;
 
-      if (task.isTemplate ?? false) {
-        url = '$baseUrl/tasks/template/toggle';
-        method = 'POST';
-        body = {
-          'template_id': task.templateId,
-          'date': task.dueDate.toIso8601String().split('T')[0],
-        };
-      } else {
-        if (task.id == null) {
-          // Task is pending, just toggle locally
-          final box = await Hive.openBox<Task>(pendingTasksBoxName);
-          if (task.key != null) {
-            final updatedTask = Task(
-              title: task.title,
-              prayerAnchor: task.prayerAnchor,
-              dueDate: task.dueDate,
-              isCompleted: !(task.isCompleted ?? false),
-              isHighPriority: task.isHighPriority,
-            );
-            await box.put(task.key, updatedTask);
-            return true;
-          }
-          return false;
-        }
-        url = '$baseUrl/tasks/${task.id}/toggle';
-        method = 'PATCH';
-        body = null;
-      }
+    final sectionTasks = plan.sections[task.prayerAnchor];
+    if (sectionTasks == null) return false;
 
-      final http.Response response;
-      if (method == 'POST') {
-        response = await http.post(
-          Uri.parse(url),
-          headers: {
-            'Authorization': 'Bearer $authToken',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode(body),
+    for (int i = 0; i < sectionTasks.length; i++) {
+      if (sectionTasks[i].title == task.title || (task.id != null && sectionTasks[i].id == task.id)) {
+        final current = sectionTasks[i];
+        sectionTasks[i] = Task(
+          id: current.id,
+          title: current.title,
+          prayerAnchor: current.prayerAnchor,
+          dueDate: current.dueDate,
+          isCompleted: !(current.isCompleted ?? false),
+          isHighPriority: current.isHighPriority,
+          templateId: current.templateId,
+          description: current.description,
+          category: current.category,
+          isTemplate: current.isTemplate,
         );
-      } else {
-        response = await http.patch(
-          Uri.parse(url),
-          headers: {
-            'Authorization': 'Bearer $authToken',
-            'Accept': 'application/json',
-          },
-        );
+        break;
       }
-
-      if (response.statusCode == 200) {
-        final box = await Hive.openBox<DayPlan>(planBoxName);
-        await box.delete(task.dueDate.toIso8601String().split('T')[0]);
-        return true;
-      }
-    } catch (e) {
-      return false;
     }
-    return false;
+
+    final updatedPlan = DayPlan(
+      date: plan.date,
+      prayerTimes: plan.prayerTimes,
+      sections: plan.sections,
+      updatedAt: DateTime.now(),
+    );
+
+    await box.put(dateStr, updatedPlan);
+    return true;
   }
 
   Future<Task?> createTask(String title, String prayerAnchor, DateTime dueDate, {bool isHighPriority = false}) async {
-    final taskData = {
-      'title': title,
-      'prayer_anchor': prayerAnchor,
-      'due_date': dueDate.toIso8601String().split('T')[0],
-      'is_high_priority': isHighPriority,
-    };
+    final dateStr = dueDate.toIso8601String().split('T')[0];
+    final box = await Hive.openBox<DayPlan>(planBoxName);
 
-    print('PlanningRepository: createTask $taskData');
-
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/tasks'),
-        headers: {
-          'Authorization': 'Bearer $authToken',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(taskData),
-      );
-
-      print('PlanningRepository: createTask API Response Status: ${response.statusCode}');
-
-      if (response.statusCode == 201 || response.statusCode == 210) {
-        final data = jsonDecode(response.body)['data'];
-        final task = Task.fromJson(data);
-        
-        final box = await Hive.openBox<DayPlan>(planBoxName);
-        await box.delete(dueDate.toIso8601String().split('T')[0]);
-        
-        print('PlanningRepository: Task created successfully on server: ${task.id}');
-        return task;
-      } else {
-        print('PlanningRepository: createTask API Error: ${response.body}');
-      }
-    } catch (e) {
-      print('PlanningRepository: createTask Network error: $e');
+    DayPlan? plan = box.get(dateStr);
+    if (plan == null) {
+      plan = await getDayPlan(dueDate);
     }
 
-    // Offline or Error: Save to pending tasks
-    print('PlanningRepository: Saving task to pending queue locally');
-    final pendingTask = Task(
+    final newTask = Task(
+      id: DateTime.now().millisecondsSinceEpoch,
       title: title,
       prayerAnchor: prayerAnchor,
       dueDate: dueDate,
-      isHighPriority: isHighPriority,
       isCompleted: false,
+      isHighPriority: isHighPriority,
     );
 
-    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
-    await pendingBox.add(pendingTask);
+    final sectionTasks = plan?.sections[prayerAnchor] ?? [];
+    sectionTasks.add(newTask);
+    plan?.sections[prayerAnchor] = sectionTasks;
 
-    return pendingTask;
+    if (plan != null) {
+      await box.put(dateStr, plan);
+    }
+
+    return newTask;
   }
 
   Future<void> syncPendingTasks() async {
-    final pendingBox = await Hive.openBox<Task>(pendingTasksBoxName);
-    if (pendingBox.isEmpty) return;
-
-    print('PlanningRepository: Syncing ${pendingBox.length} pending tasks...');
-    final tasks = List<Task>.from(pendingBox.values);
-    
-    for (int i = 0; i < tasks.length; i++) {
-      final task = tasks[i];
-      try {
-        final response = await http.post(
-          Uri.parse('$baseUrl/tasks'),
-          headers: {
-            'Authorization': 'Bearer $authToken',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'title': task.title,
-            'prayer_anchor': task.prayerAnchor,
-            'due_date': task.dueDate.toIso8601String().split('T')[0],
-            'is_high_priority': task.isHighPriority,
-            'is_completed': task.isCompleted,
-          }),
-        ).timeout(const Duration(seconds: 5));
-
-        print('PlanningRepository: syncPendingTasks [${task.title}] Status: ${response.statusCode}');
-
-        if (response.statusCode == 201 || response.statusCode == 210) {
-          await pendingBox.deleteAt(0); 
-          print('PlanningRepository: Synced task: ${task.title}');
-        } else {
-          print('PlanningRepository: Sync failed for ${task.title}: ${response.body}');
-          break; // Stop syncing if server error
-        }
-      } catch (e) {
-        print('PlanningRepository: Sync network error for ${task.title}: $e');
-        break; // Stop syncing if network error
-      }
-    }
+    // No-op in offline mode
   }
 }
