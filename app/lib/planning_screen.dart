@@ -3,10 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'home_screen.dart';
+import 'package:intl/intl.dart';
 import 'focus_mode_screen.dart';
-import 'api_service.dart';
 import 'planning_repository.dart';
+import 'prayer_service.dart';
 import 'models.dart' as models;
 
 class PlanningScreen extends StatefulWidget {
@@ -299,15 +299,15 @@ class PlanningScreenState extends State<PlanningScreen> {
                               _buildTaskListHeader(),
                               const SizedBox(height: 32),
                               if (_dayPlan != null) ...[
-                                _buildPrayerSection('After Fajr', _dayPlan!.sections['fajr'] ?? []),
+                                _buildPrayerSection('Around Fajr', _dayPlan!.sections['fajr'] ?? []),
                                 const SizedBox(height: 32),
-                                _buildPrayerSection('After Dhuhr', _dayPlan!.sections['dhuhr'] ?? []),
+                                _buildPrayerSection('Around Dhuhr', _dayPlan!.sections['dhuhr'] ?? []),
                                 const SizedBox(height: 32),
-                                _buildPrayerSection('After Asr', _dayPlan!.sections['asr'] ?? []),
+                                _buildPrayerSection('Around Asr', _dayPlan!.sections['asr'] ?? []),
                                 const SizedBox(height: 32),
-                                _buildPrayerSection('After Maghrib', _dayPlan!.sections['maghrib'] ?? []),
+                                _buildPrayerSection('Around Maghrib', _dayPlan!.sections['maghrib'] ?? []),
                                 const SizedBox(height: 32),
-                                _buildPrayerSection('After Isha', _dayPlan!.sections['isha'] ?? []),
+                                _buildPrayerSection('Around Isha', _dayPlan!.sections['isha'] ?? []),
                               ],
                               const SizedBox(height: 48),
                               _buildPulseComponent(),
@@ -662,22 +662,22 @@ class PlanningScreenState extends State<PlanningScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddTaskSheet(
-        onTaskCreated: (title, anchor, isHighPriority) async {
+        selectedDate: _selectedDate,
+        prayerTimes: _dayPlan?.prayerTimes,
+        onTaskCreated: (title, taskTime, isHighPriority) async {
           final task = await _repository.createTask(
             title,
-            anchor,
-            _selectedDate,
+            taskTime,
             isHighPriority: isHighPriority,
           );
           if (task != null) {
             _fetchDayPlan();
           }
         },
-        onStartFocus: (title, anchor) async {
+        onStartFocus: (title, taskTime) async {
           final task = await _repository.createTask(
             title,
-            anchor,
-            _selectedDate,
+            taskTime,
             isHighPriority: true,
           );
           if (task != null) {
@@ -721,6 +721,9 @@ class PlanningScreenState extends State<PlanningScreen> {
   Widget _buildPrayerSection(String title, List<models.Task> tasks) {
     if (tasks.isEmpty) return const SizedBox.shrink();
     
+    final sortedTasks = List<models.Task>.from(tasks)
+      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -736,7 +739,7 @@ class PlanningScreenState extends State<PlanningScreen> {
             ),
           ),
         ),
-        ...tasks.map((task) => _buildTaskItem(task)).toList(),
+        ...sortedTasks.map((task) => _buildTaskItem(task)).toList(),
       ],
     );
   }
@@ -844,7 +847,7 @@ class PlanningScreenState extends State<PlanningScreen> {
                         )
                       else
                         Text(
-                          '07:00 AM', // Placeholder for actual time if stored
+                          DateFormat('hh:mm a').format(task.dueDate),
                           style: GoogleFonts.manrope(
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
@@ -979,10 +982,17 @@ class PlanningScreenState extends State<PlanningScreen> {
 }
 
 class _AddTaskSheet extends StatefulWidget {
-  final Function(String, String, bool) onTaskCreated;
-  final Function(String, String)? onStartFocus;
+  final DateTime selectedDate;
+  final Map<String, dynamic>? prayerTimes;
+  final Function(String title, DateTime taskTime, bool isHighPriority) onTaskCreated;
+  final Function(String title, DateTime taskTime)? onStartFocus;
 
-  const _AddTaskSheet({required this.onTaskCreated, this.onStartFocus});
+  const _AddTaskSheet({
+    required this.selectedDate,
+    this.prayerTimes,
+    required this.onTaskCreated,
+    this.onStartFocus,
+  });
 
   @override
   State<_AddTaskSheet> createState() => _AddTaskSheetState();
@@ -990,8 +1000,51 @@ class _AddTaskSheet extends StatefulWidget {
 
 class _AddTaskSheetState extends State<_AddTaskSheet> {
   final _titleController = TextEditingController();
-  String _selectedAnchor = 'fajr';
+  late TimeOfDay _selectedTime;
   bool _isHighPriority = false;
+  late PrayerTimeValidationResult _validationResult;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedTime = TimeOfDay(hour: now.hour, minute: now.minute);
+    _validateCurrentTime();
+  }
+
+  void _validateCurrentTime() {
+    _validationResult = PrayerTimeValidation.validateTaskTime(
+      _selectedTime.hour,
+      _selectedTime.minute,
+      widget.prayerTimes,
+    );
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF546356),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF31332E),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedTime = picked;
+        _validateCurrentTime();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -1001,6 +1054,15 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final taskDateTime = DateTime(
+      widget.selectedDate.year,
+      widget.selectedDate.month,
+      widget.selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+    final formattedTimeStr = DateFormat('hh:mm a').format(taskDateTime);
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
       child: Container(
@@ -1011,7 +1073,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom + 32,
         ),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.85),
+          color: Colors.white.withOpacity(0.9),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
@@ -1043,7 +1105,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _buildLabel('TASK TITLE'),
               TextField(
                 controller: _titleController,
@@ -1062,37 +1124,95 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                 ),
               ),
               const SizedBox(height: 24),
-              _buildLabel('PRAYER ANCHOR'),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].map((anchor) {
-                    final isActive = _selectedAnchor == anchor;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedAnchor = anchor),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isActive ? const Color(0xFF546356) : const Color(0xFFF5F4ED),
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Text(
-                            anchor.toUpperCase(),
+              _buildLabel('SCHEDULED TIME'),
+              InkWell(
+                onTap: _pickTime,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F4ED),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF546356).withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, color: Color(0xFF546356), size: 22),
+                          const SizedBox(width: 12),
+                          Text(
+                            formattedTimeStr,
                             style: GoogleFonts.manrope(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.0,
-                              color: isActive ? Colors.white : const Color(0xFF5E6059),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF31332E),
                             ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'CHANGE',
+                        style: GoogleFonts.manrope(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF546356),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (!_validationResult.isValid)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF2F0),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFA73B21).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFA73B21), size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Cannot set task within 30 mins of ${_validationResult.prayerName} (${_validationResult.prayerTimeStr}). Sacred pause active.',
+                          style: GoogleFonts.manrope(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFA73B21),
+                            height: 1.3,
                           ),
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD7E7D6).withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF546356), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Time outside the 30-min prayer buffer.',
+                        style: GoogleFonts.manrope(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF546356),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1105,74 +1225,36 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
-                height: 64,
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: _isHighPriority ? 3 : 1,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (_titleController.text.isNotEmpty) {
-                            widget.onTaskCreated(
-                              _titleController.text,
-                              _selectedAnchor,
-                              _isHighPriority,
-                            );
-                            Navigator.pop(context);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF546356),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          _isHighPriority ? 'CREATE' : 'CREATE TASK',
-                          style: GoogleFonts.manrope(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 2.0,
-                          ),
-                        ),
-                      ),
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: (_validationResult.isValid && _titleController.text.trim().isNotEmpty)
+                      ? () {
+                          widget.onTaskCreated(
+                            _titleController.text.trim(),
+                            taskDateTime,
+                            _isHighPriority,
+                          );
+                          Navigator.pop(context);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF546356),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFE3E3DB),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'CREATE TASK',
+                    style: GoogleFonts.manrope(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.0,
                     ),
-                    if (_isHighPriority) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            if (_titleController.text.isNotEmpty) {
-                              widget.onStartFocus?.call(
-                                _titleController.text,
-                                _selectedAnchor,
-                              );
-                              Navigator.pop(context);
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF546356), width: 1.5),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                            foregroundColor: const Color(0xFF546356),
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                          ),
-                          icon: const Icon(Icons.timer_outlined, size: 20),
-                          label: Text(
-                            'FOCUS',
-                            style: GoogleFonts.manrope(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 2.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -1184,7 +1266,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         text,
         style: GoogleFonts.manrope(

@@ -1,6 +1,7 @@
 import 'package:hive/hive.dart';
 import 'models.dart';
 import 'api_service.dart';
+import 'prayer_service.dart';
 
 class PlanningRepository {
   static const String planBoxName = 'dayPlanBox';
@@ -146,14 +147,18 @@ class PlanningRepository {
     return true;
   }
 
-  Future<Task?> createTask(String title, String prayerAnchor, DateTime dueDate, {bool isHighPriority = false}) async {
+  Future<Task?> createTask(String title, DateTime dueDate, {bool isHighPriority = false, String? category}) async {
     final dateStr = dueDate.toIso8601String().split('T')[0];
     final box = await Hive.openBox<DayPlan>(planBoxName);
 
     DayPlan? plan = box.get(dateStr);
-    if (plan == null) {
-      plan = await getDayPlan(dueDate);
-    }
+    plan ??= await getDayPlan(dueDate);
+
+    final prayerAnchor = PrayerTimeValidation.determinePrayerAnchor(
+      dueDate.hour,
+      dueDate.minute,
+      plan?.prayerTimes,
+    );
 
     final newTask = Task(
       id: DateTime.now().millisecondsSinceEpoch,
@@ -162,10 +167,12 @@ class PlanningRepository {
       dueDate: dueDate,
       isCompleted: false,
       isHighPriority: isHighPriority,
+      category: category,
     );
 
     final sectionTasks = plan?.sections[prayerAnchor] ?? [];
     sectionTasks.add(newTask);
+    sectionTasks.sort((a, b) => a.dueDate.compareTo(b.dueDate));
     plan?.sections[prayerAnchor] = sectionTasks;
 
     if (plan != null) {

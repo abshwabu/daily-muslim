@@ -159,3 +159,85 @@ class PrayerService {
         .toList();
   }
 }
+
+class PrayerTimeValidationResult {
+  final bool isValid;
+  final String? prayerName;
+  final String? prayerTimeStr;
+
+  const PrayerTimeValidationResult({
+    required this.isValid,
+    this.prayerName,
+    this.prayerTimeStr,
+  });
+}
+
+class PrayerTimeValidation {
+  static int? parsePrayerMinutes(String? timeStr) {
+    if (timeStr == null) return null;
+    final match = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(timeStr);
+    if (match == null) return null;
+    final hour = int.parse(match.group(1)!);
+    final minute = int.parse(match.group(2)!);
+    return hour * 60 + minute;
+  }
+
+  static PrayerTimeValidationResult validateTaskTime(
+    int hour,
+    int minute,
+    Map<String, dynamic>? prayerTimes,
+  ) {
+    if (prayerTimes == null || prayerTimes.isEmpty) {
+      return const PrayerTimeValidationResult(isValid: true);
+    }
+
+    final candidateMinutes = hour * 60 + minute;
+    final prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+
+    for (final name in prayers) {
+      final rawStr = prayerTimes[name]?.toString();
+      final pMinutes = parsePrayerMinutes(rawStr);
+      if (pMinutes == null) continue;
+
+      int diff = (candidateMinutes - pMinutes).abs();
+      if (diff > 720) diff = 1440 - diff;
+
+      if (diff < 30) {
+        final cleanTime = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(rawStr ?? '')?.group(0) ?? rawStr;
+        return PrayerTimeValidationResult(
+          isValid: false,
+          prayerName: name,
+          prayerTimeStr: cleanTime,
+        );
+      }
+    }
+
+    return const PrayerTimeValidationResult(isValid: true);
+  }
+
+  static String determinePrayerAnchor(
+    int hour,
+    int minute,
+    Map<String, dynamic>? prayerTimes,
+  ) {
+    if (prayerTimes == null || prayerTimes.isEmpty) return 'fajr';
+
+    final tMin = hour * 60 + minute;
+    final dMin = parsePrayerMinutes(prayerTimes['Dhuhr']?.toString()) ?? 750;
+    final aMin = parsePrayerMinutes(prayerTimes['Asr']?.toString()) ?? 945;
+    final mMin = parsePrayerMinutes(prayerTimes['Maghrib']?.toString()) ?? 1100;
+    final iMin = parsePrayerMinutes(prayerTimes['Isha']?.toString()) ?? 1200;
+
+    if (tMin < dMin - 30) {
+      return 'fajr';
+    } else if (tMin < aMin - 30) {
+      return 'dhuhr';
+    } else if (tMin < mMin - 30) {
+      return 'asr';
+    } else if (tMin < iMin - 30) {
+      return 'maghrib';
+    } else {
+      return 'isha';
+    }
+  }
+}
