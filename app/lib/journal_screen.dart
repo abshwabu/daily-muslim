@@ -130,10 +130,13 @@ class _JournalScreenState extends State<JournalScreen> {
   Widget _buildPromptCard() {
     // Check if there's already an entry for today
     final todayStr = DateFormat('yyyy-MM-dd').format(_today);
-    final todayEntry = _entries.firstWhere(
-      (e) => e['date'] == todayStr,
-      orElse: () => null,
-    );
+    Map<String, dynamic>? todayEntry;
+    for (var e in _entries) {
+      if (e is Map && e['date'] == todayStr) {
+        todayEntry = Map<String, dynamic>.from(e);
+        break;
+      }
+    }
 
     return GestureDetector(
       onTap: () => _openEntrySheet(todayEntry),
@@ -240,7 +243,8 @@ class _JournalScreenState extends State<JournalScreen> {
           itemCount: _entries.length,
           separatorBuilder: (context, index) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
-            final entry = _entries[index];
+            final raw = _entries[index];
+            final entry = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
             return _buildEntryCard(entry);
           },
         ),

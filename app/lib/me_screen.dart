@@ -59,11 +59,12 @@ class _MeScreenState extends State<MeScreen> {
 
   String _getPrayerMethodName(int id) {
     if (_prayerMethods.isEmpty) return 'MWL (Standard)';
-    final method = _prayerMethods.firstWhere(
-      (m) => m['id'] == id,
-      orElse: () => null,
-    );
-    return method?['name'] ?? 'Muslim World League';
+    for (var m in _prayerMethods) {
+      if (m is Map && m['id'] == id) {
+        return m['name'] ?? 'Muslim World League';
+      }
+    }
+    return 'Muslim World League';
   }
 
   Future<void> _editName() async {
