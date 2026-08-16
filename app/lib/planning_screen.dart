@@ -298,17 +298,17 @@ class PlanningScreenState extends State<PlanningScreen> {
                               const SizedBox(height: 64),
                               _buildTaskListHeader(),
                               const SizedBox(height: 32),
-                              if (_dayPlan != null) ...[
-                                _buildPrayerSection('Around Fajr', _dayPlan!.sections['fajr'] ?? []),
-                                const SizedBox(height: 32),
-                                _buildPrayerSection('Around Dhuhr', _dayPlan!.sections['dhuhr'] ?? []),
-                                const SizedBox(height: 32),
-                                _buildPrayerSection('Around Asr', _dayPlan!.sections['asr'] ?? []),
-                                const SizedBox(height: 32),
-                                _buildPrayerSection('Around Maghrib', _dayPlan!.sections['maghrib'] ?? []),
-                                const SizedBox(height: 32),
-                                _buildPrayerSection('Around Isha', _dayPlan!.sections['isha'] ?? []),
-                              ],
+                               if (_dayPlan != null) ...[
+                                 _buildPrayerSection('fajr', 'Fajr', _dayPlan!.prayerTimes['Fajr'], _dayPlan!.sections['fajr'] ?? []),
+                                 const SizedBox(height: 24),
+                                 _buildPrayerSection('dhuhr', 'Dhuhr', _dayPlan!.prayerTimes['Dhuhr'], _dayPlan!.sections['dhuhr'] ?? []),
+                                 const SizedBox(height: 24),
+                                 _buildPrayerSection('asr', 'Asr', _dayPlan!.prayerTimes['Asr'], _dayPlan!.sections['asr'] ?? []),
+                                 const SizedBox(height: 24),
+                                 _buildPrayerSection('maghrib', 'Maghrib', _dayPlan!.prayerTimes['Maghrib'], _dayPlan!.sections['maghrib'] ?? []),
+                                 const SizedBox(height: 24),
+                                 _buildPrayerSection('isha', 'Isha', _dayPlan!.prayerTimes['Isha'], _dayPlan!.sections['isha'] ?? []),
+                               ],
                               const SizedBox(height: 48),
                               _buildPulseComponent(),
                               const SizedBox(height: 64),
@@ -718,28 +718,108 @@ class PlanningScreenState extends State<PlanningScreen> {
     );
   }
 
-  Widget _buildPrayerSection(String title, List<models.Task> tasks) {
-    if (tasks.isEmpty) return const SizedBox.shrink();
-    
+  String _formatPrayerTime(String? rawTime) {
+    if (rawTime == null || rawTime.isEmpty) return '--:--';
+    final match = RegExp(r"(\d{1,2}):(\d{1,2})").firstMatch(rawTime);
+    if (match == null) return rawTime;
+    final hour = int.parse(match.group(1)!);
+    final minute = int.parse(match.group(2)!);
+    final dt = DateTime(2026, 1, 1, hour, minute);
+    return DateFormat('hh:mm a').format(dt);
+  }
+
+  Widget _buildPrayerSection(
+    String prayerKey,
+    String prayerName,
+    String? rawPrayerTime,
+    List<models.Task> tasks,
+  ) {
+    final formattedPrayerTime = _formatPrayerTime(rawPrayerTime);
     final sortedTasks = List<models.Task>.from(tasks)
       ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    IconData icon;
+    switch (prayerKey.toLowerCase()) {
+      case 'fajr':
+        icon = Icons.wb_twilight;
+        break;
+      case 'dhuhr':
+        icon = Icons.light_mode;
+        break;
+      case 'asr':
+        icon = Icons.wb_sunny;
+        break;
+      case 'maghrib':
+        icon = Icons.wb_twilight;
+        break;
+      case 'isha':
+      default:
+        icon = Icons.bedtime;
+        break;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Text(
-            title.toUpperCase(),
-            style: GoogleFonts.manrope(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2.0,
-              color: const Color(0xFF5E6059),
-            ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF546356).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF546356).withOpacity(0.12)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: const Color(0xFF546356)),
+                  const SizedBox(width: 12),
+                  Text(
+                    prayerName.toUpperCase(),
+                    style: GoogleFonts.manrope(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                      color: const Color(0xFF31332E),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF546356),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  formattedPrayerTime,
+                  style: GoogleFonts.manrope(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        ...sortedTasks.map((task) => _buildTaskItem(task)).toList(),
+        if (sortedTasks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 20),
+            child: Text(
+              'No tasks scheduled for this period',
+              style: GoogleFonts.manrope(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: const Color(0xFFB2B2AB),
+              ),
+            ),
+          )
+        else
+          ...sortedTasks.map((task) => _buildTaskItem(task)).toList(),
       ],
     );
   }
