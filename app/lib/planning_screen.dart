@@ -410,20 +410,83 @@ class PlanningScreenState extends State<PlanningScreen> {
     );
   }
 
+  Future<void> _handleResetDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Load Default Sunnah Tasks',
+          style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: const Color(0xFF31332E)),
+        ),
+        content: Text(
+          'This will populate your day plan with Sunnah Rawatib prayers, Post-Salah Adhkar, Duha, Morning/Evening Adhkar, Fasting & Quran habits. Any task can be customized or deleted.',
+          style: GoogleFonts.manrope(color: const Color(0xFF5E6059)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('CANCEL', style: GoogleFonts.manrope(fontWeight: FontWeight.w800, color: const Color(0xFF5E6059))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF546356),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+            ),
+            child: Text('LOAD TASKS', style: GoogleFonts.manrope(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _repository.resetToDefaultTasks(_selectedDate);
+      _fetchDayPlan(showLoading: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Default Sunnah & Adhkar tasks loaded.')),
+        );
+      }
+    }
+  }
+
   Widget _buildRolloverButton() {
     return Center(
-      child: TextButton.icon(
-        onPressed: _handleRollover,
-        icon: const Icon(Icons.history, size: 16, color: Color(0xFF546356)),
-        label: Text(
-          'ROLLOVER UNFINISHED TASKS',
-          style: GoogleFonts.manrope(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-            color: const Color(0xFF546356),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          TextButton.icon(
+            onPressed: _handleRollover,
+            icon: const Icon(Icons.history, size: 16, color: Color(0xFF546356)),
+            label: Text(
+              'ROLLOVER UNFINISHED',
+              style: GoogleFonts.manrope(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: const Color(0xFF546356),
+              ),
+            ),
           ),
-        ),
+          TextButton.icon(
+            onPressed: _handleResetDefaults,
+            icon: const Icon(Icons.auto_awesome_outlined, size: 16, color: Color(0xFF546356)),
+            label: Text(
+              'LOAD SUNNAH DEFAULTS',
+              style: GoogleFonts.manrope(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: const Color(0xFF546356),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

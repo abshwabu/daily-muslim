@@ -40,6 +40,59 @@ class PlanningRepository {
       };
 
       int idCounter = DateTime.now().millisecondsSinceEpoch;
+
+      // 1. Monday & Thursday Voluntary Fasting
+      if (date.weekday == DateTime.monday || date.weekday == DateTime.thursday) {
+        final dayName = date.weekday == DateTime.monday ? 'Monday' : 'Thursday';
+        final fajrTime = prayerTimes['Fajr']?.toString();
+        final minutes = PrayerTimeValidation.parsePrayerMinutes(fajrTime) ?? 300;
+        final taskDate = DateTime(date.year, date.month, date.day, minutes ~/ 60, minutes % 60);
+
+        initialSections['fajr']!.add(Task(
+          id: idCounter++,
+          title: 'Voluntary Fasting ($dayName)',
+          prayerAnchor: 'fajr',
+          dueDate: taskDate,
+          isCompleted: false,
+          isHighPriority: true,
+          description: 'Sunnah voluntary fasting on $dayName',
+          category: 'Sunnah',
+          isTemplate: true,
+        ));
+      }
+
+      // 2. Friday Special (Surah Al-Kahf & Salawat)
+      if (date.weekday == DateTime.friday) {
+        final dhuhrTime = prayerTimes['Dhuhr']?.toString();
+        final minutes = PrayerTimeValidation.parsePrayerMinutes(dhuhrTime) ?? 720;
+        final taskDate = DateTime(date.year, date.month, date.day, minutes ~/ 60, minutes % 60);
+
+        initialSections['dhuhr']!.add(Task(
+          id: idCounter++,
+          title: 'Recite Surah Al-Kahf',
+          prayerAnchor: 'dhuhr',
+          dueDate: taskDate,
+          isCompleted: false,
+          isHighPriority: true,
+          description: 'Friday Sunnah recitation of Surah Al-Kahf',
+          category: 'Quran',
+          isTemplate: true,
+        ));
+
+        initialSections['dhuhr']!.add(Task(
+          id: idCounter++,
+          title: 'Abundant Salawat on Prophet (PBUH)',
+          prayerAnchor: 'dhuhr',
+          dueDate: taskDate.add(const Duration(minutes: 15)),
+          isCompleted: false,
+          isHighPriority: false,
+          description: 'Send blessings upon the Prophet Muhammad (PBUH) on Friday',
+          category: 'Azkar',
+          isTemplate: true,
+        ));
+      }
+
+      // 3. Populate standard templates
       for (var t in templates) {
         final anchor = t.prayerAnchor.toLowerCase();
         initialSections.putIfAbsent(anchor, () => []);
@@ -83,17 +136,46 @@ class PlanningRepository {
 
   Future<List<TaskTemplate>> getTaskTemplates() async {
     final box = await Hive.openBox<TaskTemplate>(templateBoxName);
-    if (box.isEmpty) {
+    if (box.length < 10) {
+      await box.clear();
       final defaultTemplates = [
-        TaskTemplate(id: 1, title: 'Morning Adhkar & Surah Yasin', category: 'Spiritual', prayerAnchor: 'fajr', description: 'Begin the day in remembrance'),
-        TaskTemplate(id: 2, title: 'Quran Recitation (1 Juz)', category: 'Quran', prayerAnchor: 'dhuhr', description: 'Daily Quran reading goal'),
-        TaskTemplate(id: 3, title: 'Evening Adhkar', category: 'Spiritual', prayerAnchor: 'asr', description: 'Protective dhikr before sunset'),
-        TaskTemplate(id: 4, title: 'Family Reflection & Gratitude', category: 'Family', prayerAnchor: 'maghrib', description: 'Gather with loved ones'),
-        TaskTemplate(id: 5, title: 'Night Prayer & Witr', category: 'Spiritual', prayerAnchor: 'isha', description: 'Seal the day with prayer'),
+        // Fajr
+        TaskTemplate(id: 1, title: 'Sunnah Before Fajr (2 Rakat)', category: 'Sunnah', prayerAnchor: 'fajr', description: '2 Raka\'at Sunnah prayer before Fajr'),
+        TaskTemplate(id: 2, title: 'Fajr Post-Salah Adhkar', category: 'Azkar', prayerAnchor: 'fajr', description: 'Tasbih, Tahmid, Takbir & Ayat al-Kursi after Fajr'),
+        TaskTemplate(id: 3, title: 'Morning Adhkar (Sabah)', category: 'Azkar', prayerAnchor: 'fajr', description: 'Essential morning supplications & remembrance'),
+
+        // Dhuhr
+        TaskTemplate(id: 4, title: 'Duha Prayer (Forenoon)', category: 'Sunnah', prayerAnchor: 'dhuhr', description: '2-8 Raka\'at Duha prayer during forenoon'),
+        TaskTemplate(id: 5, title: 'Sunnah Before Dhuhr (4 Rakat)', category: 'Sunnah', prayerAnchor: 'dhuhr', description: '4 Raka\'at Sunnah prayer before Dhuhr'),
+        TaskTemplate(id: 6, title: 'Dhuhr Post-Salah Adhkar', category: 'Azkar', prayerAnchor: 'dhuhr', description: 'Remembrance and supplications after Dhuhr'),
+        TaskTemplate(id: 7, title: 'Sunnah After Dhuhr (2 Rakat)', category: 'Sunnah', prayerAnchor: 'dhuhr', description: '2 Raka\'at Sunnah prayer after Dhuhr'),
+
+        // Asr
+        TaskTemplate(id: 8, title: 'Evening Adhkar (Masaa)', category: 'Azkar', prayerAnchor: 'asr', description: 'Protective evening supplications before sunset'),
+        TaskTemplate(id: 9, title: 'Asr Post-Salah Adhkar', category: 'Azkar', prayerAnchor: 'asr', description: 'Remembrance and supplications after Asr'),
+        TaskTemplate(id: 10, title: 'Daily Quran Recitation', category: 'Quran', prayerAnchor: 'asr', description: 'Daily Quran reading & contemplation'),
+
+        // Maghrib
+        TaskTemplate(id: 11, title: 'Maghrib Post-Salah Adhkar', category: 'Azkar', prayerAnchor: 'maghrib', description: 'Remembrance and supplications after Maghrib'),
+        TaskTemplate(id: 12, title: 'Sunnah After Maghrib (2 Rakat)', category: 'Sunnah', prayerAnchor: 'maghrib', description: '2 Raka\'at Sunnah prayer after Maghrib'),
+
+        // Isha
+        TaskTemplate(id: 13, title: 'Isha Post-Salah Adhkar', category: 'Azkar', prayerAnchor: 'isha', description: 'Remembrance and supplications after Isha'),
+        TaskTemplate(id: 14, title: 'Sunnah After Isha (2 Rakat)', category: 'Sunnah', prayerAnchor: 'isha', description: '2 Raka\'at Sunnah prayer after Isha'),
+        TaskTemplate(id: 15, title: 'Night Prayer (Tahajjud & Witr)', category: 'Sunnah', prayerAnchor: 'isha', description: 'Night prayer & Witr before sleep'),
+        TaskTemplate(id: 16, title: 'Recite Surah Al-Mulk', category: 'Quran', prayerAnchor: 'isha', description: 'Recite Surah Al-Mulk before sleeping'),
       ];
       await box.addAll(defaultTemplates);
     }
     return box.values.toList();
+  }
+
+  Future<bool> resetToDefaultTasks(DateTime date) async {
+    final dateStr = _formatDateKey(date);
+    final box = await Hive.openBox<DayPlan>(planBoxName);
+    await box.delete(dateStr);
+    await getDayPlan(date);
+    return true;
   }
 
   Future<bool> rolloverTasks() async {
