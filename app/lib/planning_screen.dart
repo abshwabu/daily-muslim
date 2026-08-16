@@ -742,7 +742,7 @@ class PlanningScreenState extends State<PlanningScreen> {
 
     if (_dayPlan?.prayerTimes != null) {
       final timesMap = _dayPlan!.prayerTimes;
-      final prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+      final prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
       for (final name in prayers) {
         final timeStr = timesMap[name]?.toString();
