@@ -299,15 +299,23 @@ class PlanningScreenState extends State<PlanningScreen> {
                               _buildTaskListHeader(),
                               const SizedBox(height: 32),
                                if (_dayPlan != null) ...[
-                                 _buildPrayerSection('fajr', 'Fajr', _dayPlan!.prayerTimes['Fajr'], _dayPlan!.sections['fajr'] ?? []),
-                                 const SizedBox(height: 24),
-                                 _buildPrayerSection('dhuhr', 'Dhuhr', _dayPlan!.prayerTimes['Dhuhr'], _dayPlan!.sections['dhuhr'] ?? []),
-                                 const SizedBox(height: 24),
-                                 _buildPrayerSection('asr', 'Asr', _dayPlan!.prayerTimes['Asr'], _dayPlan!.sections['asr'] ?? []),
-                                 const SizedBox(height: 24),
-                                 _buildPrayerSection('maghrib', 'Maghrib', _dayPlan!.prayerTimes['Maghrib'], _dayPlan!.sections['maghrib'] ?? []),
-                                 const SizedBox(height: 24),
-                                 _buildPrayerSection('isha', 'Isha', _dayPlan!.prayerTimes['Isha'], _dayPlan!.sections['isha'] ?? []),
+                                 Builder(
+                                   builder: (context) {
+                                     final items = _buildTimelineItems();
+                                     if (items.isEmpty) {
+                                       return const SizedBox.shrink();
+                                     }
+                                     return Column(
+                                       children: items.map((item) {
+                                         if (item.type == _TimelineItemType.prayer) {
+                                           return _buildPrayerMilestoneCard(item.prayerName!, item.prayerTimeStr);
+                                         } else {
+                                           return _buildTaskItem(item.task!);
+                                         }
+                                       }).toList(),
+                                     );
+                                   },
+                                 ),
                                ],
                               const SizedBox(height: 48),
                               _buildPulseComponent(),
@@ -728,20 +736,74 @@ class PlanningScreenState extends State<PlanningScreen> {
     return DateFormat('hh:mm a').format(dt);
   }
 
-  Widget _buildPrayerSection(
-    String prayerKey,
-    String prayerName,
-    String? rawPrayerTime,
-    List<models.Task> tasks,
-  ) {
-    final formattedPrayerTime = _formatPrayerTime(rawPrayerTime);
-    final sortedTasks = List<models.Task>.from(tasks)
-      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+  List<_TimelineItem> _buildTimelineItems() {
+    final List<_TimelineItem> items = [];
+    final selectedDate = _selectedDate;
 
+    if (_dayPlan?.prayerTimes != null) {
+      final timesMap = _dayPlan!.prayerTimes;
+      final prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+
+      for (final name in prayers) {
+        final timeStr = timesMap[name]?.toString();
+        final minutes = PrayerTimeValidation.parsePrayerMinutes(timeStr);
+        if (minutes != null) {
+          final hour = minutes ~/ 60;
+          final minute = minutes % 60;
+          final prayerDateTime = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+            hour,
+            minute,
+          );
+          items.add(_TimelineItem.prayer(
+            time: prayerDateTime,
+            prayerName: name,
+            prayerTimeStr: timeStr,
+          ));
+        }
+      }
+    }
+
+    if (_dayPlan?.sections != null) {
+      final Map<int, models.Task> uniqueTasks = {};
+      for (final taskList in _dayPlan!.sections.values) {
+        for (final task in taskList) {
+          if (task.id != null) {
+            uniqueTasks[task.id!] = task;
+          }
+        }
+      }
+
+      for (final task in uniqueTasks.values) {
+        items.add(_TimelineItem.task(
+          time: task.dueDate,
+          task: task,
+        ));
+      }
+    }
+
+    items.sort((a, b) {
+      final cmp = a.time.compareTo(b.time);
+      if (cmp != 0) return cmp;
+      if (a.type == _TimelineItemType.prayer && b.type == _TimelineItemType.task) return -1;
+      if (a.type == _TimelineItemType.task && b.type == _TimelineItemType.prayer) return 1;
+      return 0;
+    });
+
+    return items;
+  }
+
+  Widget _buildPrayerMilestoneCard(String prayerName, String? rawPrayerTime) {
+    final formattedPrayerTime = _formatPrayerTime(rawPrayerTime);
     IconData icon;
-    switch (prayerKey.toLowerCase()) {
+    switch (prayerName.toLowerCase()) {
       case 'fajr':
         icon = Icons.wb_twilight;
+        break;
+      case 'sunrise':
+        icon = Icons.wb_sunny_outlined;
         break;
       case 'dhuhr':
         icon = Icons.light_mode;
@@ -758,69 +820,58 @@ class PlanningScreenState extends State<PlanningScreen> {
         break;
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF546356).withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF546356).withOpacity(0.12)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final isSunrise = prayerName.toLowerCase() == 'sunrise';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: isSunrise
+            ? const Color(0xFFEBF4B3).withOpacity(0.35)
+            : const Color(0xFF546356).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSunrise
+              ? const Color(0xFF5C6330).withOpacity(0.2)
+              : const Color(0xFF546356).withOpacity(0.12),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(icon, size: 20, color: const Color(0xFF546356)),
-                  const SizedBox(width: 12),
-                  Text(
-                    prayerName.toUpperCase(),
-                    style: GoogleFonts.manrope(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                      color: const Color(0xFF31332E),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF546356),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  formattedPrayerTime,
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
+              Icon(icon, size: 20, color: isSunrise ? const Color(0xFF5C6330) : const Color(0xFF546356)),
+              const SizedBox(width: 12),
+              Text(
+                prayerName.toUpperCase(),
+                style: GoogleFonts.manrope(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                  color: isSunrise ? const Color(0xFF5C6330) : const Color(0xFF31332E),
                 ),
               ),
             ],
           ),
-        ),
-        if (sortedTasks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(left: 12, bottom: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSunrise ? const Color(0xFF5C6330) : const Color(0xFF546356),
+              borderRadius: BorderRadius.circular(100),
+            ),
             child: Text(
-              'No tasks scheduled for this period',
+              formattedPrayerTime,
               style: GoogleFonts.manrope(
                 fontSize: 12,
-                fontStyle: FontStyle.italic,
-                color: const Color(0xFFB2B2AB),
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.5,
               ),
             ),
-          )
-        else
-          ...sortedTasks.map((task) => _buildTaskItem(task)).toList(),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1358,4 +1409,28 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
       ),
     );
   }
+}
+
+enum _TimelineItemType { prayer, task }
+
+class _TimelineItem {
+  final _TimelineItemType type;
+  final DateTime time;
+  final String? prayerName;
+  final String? prayerTimeStr;
+  final models.Task? task;
+
+  _TimelineItem.prayer({
+    required this.time,
+    required this.prayerName,
+    required this.prayerTimeStr,
+  })  : type = _TimelineItemType.prayer,
+        task = null;
+
+  _TimelineItem.task({
+    required this.time,
+    required this.task,
+  })  : type = _TimelineItemType.task,
+        prayerName = null,
+        prayerTimeStr = null;
 }
