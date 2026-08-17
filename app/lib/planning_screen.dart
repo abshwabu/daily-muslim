@@ -723,11 +723,14 @@ class PlanningScreenState extends State<PlanningScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildChip('Deep Work'),
                           const SizedBox(width: 8),
