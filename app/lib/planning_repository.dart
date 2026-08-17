@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 import 'models.dart';
 import 'api_service.dart';
 import 'prayer_service.dart';
+import 'notification_service.dart';
 
 class PlanningRepository {
   static const String planBoxName = 'dayPlanBox';
@@ -129,6 +130,10 @@ class PlanningRepository {
       for (final key in ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']) {
         plan.sections.putIfAbsent(key, () => []);
       }
+    }
+
+    if (plan != null && plan.prayerTimes.isNotEmpty) {
+      NotificationService().schedulePrayerNotifications(plan.prayerTimes, date: date);
     }
 
     return plan;
@@ -310,6 +315,11 @@ class PlanningRepository {
     );
 
     await box.put(matchedDateKey, updatedPlan);
+    if (newCompletedState && task.id != null) {
+      NotificationService().cancelTaskReminder(task.id!);
+    } else if (!newCompletedState) {
+      NotificationService().scheduleTaskReminder(task);
+    }
     return true;
   }
 
@@ -352,6 +362,7 @@ class PlanningRepository {
       await box.put(dateStr, updatedPlan);
     }
 
+    NotificationService().scheduleTaskReminder(newTask);
     return newTask;
   }
 
@@ -423,6 +434,13 @@ class PlanningRepository {
     );
 
     await box.put(matchedDateKey, newDayPlan);
+
+    if (finalTask.isCompleted == true && finalTask.id != null) {
+      NotificationService().cancelTaskReminder(finalTask.id!);
+    } else {
+      NotificationService().scheduleTaskReminder(finalTask);
+    }
+
     return true;
   }
 
@@ -467,6 +485,9 @@ class PlanningRepository {
     );
 
     await box.put(matchedDateKey, newDayPlan);
+    if (task.id != null) {
+      NotificationService().cancelTaskReminder(task.id!);
+    }
     return true;
   }
 

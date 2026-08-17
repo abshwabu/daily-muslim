@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'notification_service.dart';
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -16,10 +18,34 @@ class _MeScreenState extends State<MeScreen> {
   List<dynamic> _prayerMethods = [];
   bool _isLoading = true;
 
+  bool _notifyPrayer = true;
+  bool _notifyTask = true;
+  bool _notifyJournal = true;
+
   @override
   void initState() {
     super.initState();
     _fetchData();
+    _loadNotificationPreferences();
+  }
+
+  Future<void> _loadNotificationPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notifyPrayer = prefs.getBool(NotificationService.prefPrayerNotifications) ?? true;
+      _notifyTask = prefs.getBool(NotificationService.prefTaskReminders) ?? true;
+      _notifyJournal = prefs.getBool(NotificationService.prefJournalReminder) ?? true;
+    });
+  }
+
+  Future<void> _toggleNotificationPref(String key, bool val) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, val);
+    await _loadNotificationPreferences();
+
+    if (key == NotificationService.prefJournalReminder) {
+      await NotificationService().scheduleDailyJournalReminder();
+    }
   }
 
   Future<void> _fetchData() async {
@@ -218,6 +244,10 @@ class _MeScreenState extends State<MeScreen> {
                         _buildSectionHeader('SETTINGS'),
                         const SizedBox(height: 16),
                         _buildSettingsList(),
+                        const SizedBox(height: 32),
+                        _buildSectionHeader('NOTIFICATIONS & REMINDERS'),
+                        const SizedBox(height: 16),
+                        _buildNotificationSettingsList(),
                         const SizedBox(height: 48),
                         _buildOfflineStatusBanner(),
                         const SizedBox(height: 120),
@@ -438,6 +468,88 @@ class _MeScreenState extends State<MeScreen> {
             'Asr Calculation (Madhab)', 
             isHanafi ? 'Hanafi' : 'Shafi / Standard',
             onTap: _toggleHanafi,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationSettingsList() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F4ED),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        children: [
+          _buildSwitchItem(
+            Icons.notifications_active_outlined,
+            'Prayer Times (Adhan)',
+            'Notify at Fajr, Dhuhr, Asr, Maghrib & Isha',
+            _notifyPrayer,
+            (val) => _toggleNotificationPref(NotificationService.prefPrayerNotifications, val),
+          ),
+          _buildDivider(),
+          _buildSwitchItem(
+            Icons.task_alt_outlined,
+            'Task Reminders',
+            'Notify at scheduled task times',
+            _notifyTask,
+            (val) => _toggleNotificationPref(NotificationService.prefTaskReminders, val),
+          ),
+          _buildDivider(),
+          _buildSwitchItem(
+            Icons.book_outlined,
+            'Daily Journal Reflection',
+            'Evening reflection reminder (9:00 PM)',
+            _notifyJournal,
+            (val) => _toggleNotificationPref(NotificationService.prefJournalReminder, val),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitchItem(
+    IconData icon,
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF546356), size: 24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF31332E),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.manrope(
+                    fontSize: 12,
+                    color: const Color(0xFF5E6059),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            activeColor: const Color(0xFF546356),
+            onChanged: onChanged,
           ),
         ],
       ),
