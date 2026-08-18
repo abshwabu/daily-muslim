@@ -37,10 +37,10 @@ class QuickStatsWidget extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(color: Colors.white, width: 1.5),
           boxShadow: [
             BoxShadow(
@@ -58,35 +58,42 @@ class QuickStatsWidget extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: iconColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, size: 18, color: iconColor),
+                  child: Icon(icon, size: 16, color: iconColor),
                 ),
-                Icon(Icons.arrow_forward_ios, size: 12, color: const Color(0xFF5E6059).withOpacity(0.4)),
+                Icon(Icons.arrow_forward_ios, size: 10, color: const Color(0xFF5E6059).withOpacity(0.4)),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: GoogleFonts.manrope(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF31332E),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.manrope(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF5E6059),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF31332E),
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF5E6059),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -100,9 +107,9 @@ class QuickStatsWidget extends StatelessWidget {
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.35,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.25,
       children: [
         _buildStatCard(
           icon: Icons.mosque_outlined,
