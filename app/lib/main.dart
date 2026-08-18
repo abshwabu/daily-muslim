@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'main_screen.dart';
 import 'models.dart';
-import 'notification_service.dart';
+import 'services/widget_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +15,7 @@ void main() async {
   await notificationService.init();
   await notificationService.requestPermissions();
   await notificationService.scheduleDailyJournalReminder();
+  await WidgetService.init();
 
   runApp(const MyApp());
 }

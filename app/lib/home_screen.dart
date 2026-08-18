@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'prayer_service.dart';
 import 'journal_screen.dart';
+import 'widgets/widgets.dart';
+import 'services/widget_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(int index)? onNavigateTab;
@@ -215,6 +217,16 @@ class HomeScreenState extends State<HomeScreen> {
         _timeUntilNext = nextPrayerTime!.difference(now);
         _prayerProgress = (elapsed / total).clamp(0.0, 1.0);
       });
+
+      // Update Native OS Home Screen Widget
+      WidgetService.updatePrayerWidget(
+        nextPrayerName: _nextPrayerName,
+        nextPrayerTime: _nextPrayerTime,
+        timeUntilNext: 'in ${_formatDuration(_timeUntilNext)}',
+        prevPrayerName: _prevPrayerName,
+        prevPrayerTime: _prevPrayerTime,
+        cityName: _user?['city'] ?? 'Addis Ababa',
+      );
     }
   }
 
@@ -511,12 +523,67 @@ class HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildHeader(),
-                              const SizedBox(height: 48),
-                              _buildPrayerPulse(),
-                              const SizedBox(height: 48),
-                              _buildDailyRhythms(context),
-                              const SizedBox(height: 48),
-                              _buildReflectionGrid(),
+                              const SizedBox(height: 28),
+                              PrayerPulseCard(
+                                nextPrayerName: _nextPrayerName,
+                                nextPrayerTime: _nextPrayerTime,
+                                prevPrayerName: _prevPrayerName,
+                                prevPrayerTime: _prevPrayerTime,
+                                timeUntilNext: _timeUntilNext,
+                                prayerProgress: _prayerProgress,
+                                onQiblaTap: _showQiblaSheet,
+                                onPrayerDetailsTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
+                              ),
+                              const SizedBox(height: 32),
+                              SectionHeader(
+                                eyebrow: 'DAILY RHYTHMS',
+                                title: 'Prayer Schedule',
+                                subtitle: 'Location: ${_user?['city'] ?? 'Addis Ababa'}',
+                                trailing: Row(
+                                  children: [
+                                    const Icon(Icons.explore_outlined, size: 16, color: Color(0xFF546356)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Qibla',
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF546356),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                onTrailingTap: _showQiblaSheet,
+                              ),
+                              const SizedBox(height: 16),
+                              if (_prayerTimes != null)
+                                PrayerTimelineWidget(
+                                  prayerTimes: _prayerTimes!,
+                                  nextPrayerName: _nextPrayerName,
+                                  onPrayerSelected: _showPrayerDetails,
+                                ),
+                              const SizedBox(height: 32),
+                              QuickStatsWidget(
+                                cityName: _user?['city'] ?? 'Addis Ababa',
+                                onPrayersTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
+                                onTasksTap: () => widget.onNavigateTab?.call(1),
+                                onDhikrTap: () {},
+                                onQiblaTap: _showQiblaSheet,
+                              ),
+                              const SizedBox(height: 32),
+                              const HabitStreakTracker(
+                                streakDays: 5,
+                                completedPrayers: 3,
+                                totalPrayers: 5,
+                                completedTasks: 4,
+                                totalTasks: 6,
+                              ),
+                              const SizedBox(height: 32),
+                              const DhikrTasbihWidget(),
+                              const SizedBox(height: 32),
+                              const DailyReflectionCard(),
+                              const SizedBox(height: 32),
+                              const FocusTimerCard(),
                               const SizedBox(height: 120),
                             ],
                           ),
