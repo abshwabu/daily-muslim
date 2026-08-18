@@ -51,33 +51,38 @@ class HabitStreakTracker extends StatelessWidget {
         children: [
           // Top row: Streak count and title
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'DAILY RHYTHM & CONSISTENCY',
-                    style: GoogleFonts.manrope(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      color: primaryColor,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DAILY RHYTHM & CONSISTENCY',
+                      style: GoogleFonts.manrope(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: primaryColor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Your Weekly Rhythm',
-                    style: GoogleFonts.manrope(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Weekly Rhythm',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.manrope(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEBF4B3).withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
@@ -86,12 +91,12 @@ class HabitStreakTracker extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.bolt, size: 16, color: Color(0xFF435A22)),
-                    const SizedBox(width: 4),
+                    const Icon(Icons.bolt, size: 15, color: Color(0xFF435A22)),
+                    const SizedBox(width: 3),
                     Text(
                       '$streakDays Day Streak',
                       style: GoogleFonts.manrope(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF435A22),
                       ),
@@ -101,9 +106,9 @@ class HabitStreakTracker extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // 7-day dots
+          // 7-day dots with responsive flex
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (index) {
@@ -111,47 +116,49 @@ class HabitStreakTracker extends StatelessWidget {
               final isToday = index == currentDayIndex;
               final isCompleted = isPast || (isToday && percent >= 60);
 
-              return Column(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isCompleted
-                          ? primaryColor
-                          : isToday
-                              ? const Color(0xFFD7E7D6)
-                              : const Color(0xFFF5F4ED),
-                      border: isToday
-                          ? Border.all(color: primaryColor, width: 2)
-                          : null,
+              return Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isCompleted
+                            ? primaryColor
+                            : isToday
+                                ? const Color(0xFFD7E7D6)
+                                : const Color(0xFFF5F4ED),
+                        border: isToday
+                            ? Border.all(color: primaryColor, width: 2)
+                            : null,
+                      ),
+                      child: Center(
+                        child: isCompleted
+                            ? const Icon(Icons.check, size: 16, color: Colors.white)
+                            : isToday
+                                ? Text(
+                                    '$percent%',
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: primaryColor,
+                                    ),
+                                  )
+                                : null,
+                      ),
                     ),
-                    child: Center(
-                      child: isCompleted
-                          ? const Icon(Icons.check, size: 18, color: Colors.white)
-                          : isToday
-                              ? Text(
-                                  '$percent%',
-                                  style: GoogleFonts.manrope(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: primaryColor,
-                                  ),
-                                )
-                              : null,
+                    const SizedBox(height: 5),
+                    Text(
+                      weekDays[index],
+                      style: GoogleFonts.manrope(
+                        fontSize: 11,
+                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                        color: isToday ? primaryColor : mutedColor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    weekDays[index],
-                    style: GoogleFonts.manrope(
-                      fontSize: 11,
-                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                      color: isToday ? primaryColor : mutedColor,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               );
             }),
           ),
