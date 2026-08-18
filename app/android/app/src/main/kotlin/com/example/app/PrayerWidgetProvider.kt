@@ -17,7 +17,7 @@ class PrayerWidgetProvider : HomeWidgetProvider() {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.prayer_widget).apply {
                 val nextPrayer = widgetData.getString("next_prayer_name", "DHUHR")
-                val prayerTime = widgetData.getString("next_prayer_time", "--:--")
+                val prayerTime = widgetData.getString("next_prayer_time", "12:28")
                 val countdown = widgetData.getString("time_until_next", "Upcoming")
                 val city = widgetData.getString("city_name", "Addis Ababa")
                 val tasks = widgetData.getString("tasks_summary", "Daily Muslim • Sakinah")

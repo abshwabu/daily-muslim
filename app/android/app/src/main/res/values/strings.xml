@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sakinah</string>
+    <string name="widget_name">Sakinah • Prayer Countdown</string>
+    <string name="widget_description">Shows upcoming prayer time, countdown, and city info.</string>
+    <string name="widget_dhikr_name">Sakinah • Dhikr Counter</string>
+    <string name="widget_dhikr_desc">Quick daily remembrance and tasbih counter.</string>
+    <string name="widget_verse_name">Sakinah • Daily Reflection</string>
+    <string name="widget_verse_desc">Daily Quranic verse and reflection for mindfulness.</string>
+    <string name="widget_task_name">Sakinah • Daily Routine</string>
+    <string name="widget_task_desc">Shows your next daily task and routine completion progress.</string>
+</resources>

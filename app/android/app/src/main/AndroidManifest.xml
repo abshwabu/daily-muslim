@@ -21,9 +21,10 @@
             </intent-filter>
         </receiver>
 
-        <!-- Android Home Screen AppWidget -->
+        <!-- Android Home Screen AppWidgets -->
         <receiver
             android:name=".PrayerWidgetProvider"
+            android:label="@string/widget_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -31,6 +32,42 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/prayer_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".DhikrWidgetProvider"
+            android:label="@string/widget_dhikr_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dhikr_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".VerseWidgetProvider"
+            android:label="@string/widget_verse_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/verse_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".TaskWidgetProvider"
+            android:label="@string/widget_task_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/task_widget_info" />
         </receiver>
         <activity
             android:name=".MainActivity"

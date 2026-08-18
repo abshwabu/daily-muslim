@@ -120,11 +120,30 @@ class HomeScreenState extends State<HomeScreen> {
         });
         _calculateNextPrayer();
       } else {
+        _useLocalCalculatedPrayerTimes();
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
+      _useLocalCalculatedPrayerTimes();
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _useLocalCalculatedPrayerTimes() {
+    final cityName = _user?['city'] ?? 'Addis Ababa, Ethiopia';
+    final cityLoc = PrayerService.findCity(cityName);
+    final method = _user?['prayer_method'] ?? 3;
+    final calcTimes = PrayerService.calculatePrayerTimes(
+      latitude: cityLoc.latitude,
+      longitude: cityLoc.longitude,
+      date: DateTime.now(),
+      methodId: method,
+    );
+    setState(() {
+      _prayerTimes = calcTimes;
+      _isLoading = false;
+    });
+    _calculateNextPrayer();
   }
 
   void _calculateNextPrayer() {
@@ -255,6 +274,14 @@ class HomeScreenState extends State<HomeScreen> {
         );
       }
     });
+
+    final currentItem = _dhikrItems[_dhikrTargetIndex];
+    WidgetService.updateDhikrWidget(
+      title: currentItem['title'] ?? 'SUBHANALLAH',
+      meaning: currentItem['meaning'] ?? 'Glory be to Allah',
+      count: _dhikrCount,
+      target: currentItem['target'] ?? 33,
+    );
   }
 
   void _resetDhikr() {
@@ -262,6 +289,13 @@ class HomeScreenState extends State<HomeScreen> {
     setState(() {
       _dhikrCount = 0;
     });
+    final currentItem = _dhikrItems[_dhikrTargetIndex];
+    WidgetService.updateDhikrWidget(
+      title: currentItem['title'] ?? 'SUBHANALLAH',
+      meaning: currentItem['meaning'] ?? 'Glory be to Allah',
+      count: 0,
+      target: currentItem['target'] ?? 33,
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Dhikr counter reset'),
@@ -275,6 +309,11 @@ class HomeScreenState extends State<HomeScreen> {
     setState(() {
       _verseIndex = (_verseIndex + 1) % _verses.length;
     });
+    final v = _verses[_verseIndex];
+    WidgetService.updateVerseWidget(
+      text: v['text'] ?? '',
+      reference: v['ref'] ?? '',
+    );
   }
 
   void _copyVerse() {

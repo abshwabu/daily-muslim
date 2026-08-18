@@ -5,8 +5,7 @@
     android:targetCellWidth="3"
     android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/prayer_widget"
+    android:initialLayout="@layout/dhikr_widget"
     android:resizeMode="horizontal|vertical"
-    android:description="@string/widget_description"
+    android:description="@string/widget_dhikr_desc"
     android:widgetCategory="home_screen" />
-

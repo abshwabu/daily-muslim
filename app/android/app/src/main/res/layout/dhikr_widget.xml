@@ -1,47 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
+    android:id="@+id/dhikr_widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
     android:padding="16dp">
 
-    <!-- Header / Eyebrow (RelativeLayout to avoid any unsupported View tags) -->
+    <!-- Header -->
     <RelativeLayout
-        android:id="@+id/header_layout"
+        android:id="@+id/dhikr_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true">
 
         <TextView
-            android:id="@+id/tv_badge"
+            android:id="@+id/tv_dhikr_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
-            android:text="NEXT PRAYER"
+            android:text="DAILY DHIKR"
             android:textColor="#546356"
             android:textSize="10sp"
             android:textStyle="bold"
             android:letterSpacing="0.1" />
 
         <TextView
-            android:id="@+id/tv_city"
+            android:id="@+id/tv_dhikr_target"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
-            android:text="Addis Ababa"
+            android:text="Target: 33"
             android:textColor="#5E6059"
             android:textSize="10sp" />
     </RelativeLayout>
 
-    <!-- Main Content -->
+    <!-- Center Content -->
     <LinearLayout
-        android:id="@+id/center_content"
+        android:id="@+id/dhikr_content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/header_layout"
+        android:layout_below="@id/dhikr_header"
         android:layout_marginTop="8dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
@@ -53,45 +53,45 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/tv_prayer_name"
+                android:id="@+id/tv_dhikr_arabic"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="DHUHR"
+                android:text="SUBHANALLAH"
                 android:textColor="#31332E"
-                android:textSize="22sp"
+                android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tv_countdown"
+                android:id="@+id/tv_dhikr_meaning"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="in 1h 45m"
-                android:textColor="#546356"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                android:text="Glory be to Allah"
+                android:textColor="#5E6059"
+                android:textSize="11sp" />
         </LinearLayout>
 
         <TextView
-            android:id="@+id/tv_prayer_time"
+            android:id="@+id/tv_dhikr_count"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="12:28"
-            android:textColor="#31332E"
-            android:textSize="26sp" />
+            android:text="33"
+            android:textColor="#546356"
+            android:textSize="28sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Footer with Task / Daily summary -->
+    <!-- Footer -->
     <TextView
-        android:id="@+id/tv_footer_tasks"
+        android:id="@+id/tv_dhikr_footer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="Daily Muslim • Sakinah"
+        android:text="Tap to open Dhikr Counter • Sakinah"
         android:textColor="#5E6059"
-        android:textSize="11sp" />
+        android:textSize="10sp" />
 
 </RelativeLayout>
