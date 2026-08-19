@@ -7,14 +7,16 @@ class HabitStreakTracker extends StatelessWidget {
   final int totalTasks;
   final int completedPrayers;
   final int totalPrayers;
+  final List<bool>? weekProgress;
 
   const HabitStreakTracker({
     super.key,
-    this.streakDays = 5,
-    this.completedTasks = 4,
-    this.totalTasks = 6,
-    this.completedPrayers = 3,
+    this.streakDays = 1,
+    this.completedTasks = 0,
+    this.totalTasks = 0,
+    this.completedPrayers = 0,
     this.totalPrayers = 5,
+    this.weekProgress,
   });
 
   @override
@@ -114,7 +116,9 @@ class HabitStreakTracker extends StatelessWidget {
             children: List.generate(7, (index) {
               final isPast = index < currentDayIndex;
               final isToday = index == currentDayIndex;
-              final isCompleted = isPast || (isToday && percent >= 60);
+              final bool isCompleted = weekProgress != null && index < weekProgress!.length
+                  ? weekProgress![index]
+                  : (isPast || (isToday && (percent >= 50 || completedPrayers >= 1)));
 
               return Expanded(
                 child: Column(

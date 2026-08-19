@@ -5,13 +5,17 @@ import 'package:google_fonts/google_fonts.dart';
 class PrayerTimelineWidget extends StatelessWidget {
   final Map<String, dynamic> prayerTimes;
   final String nextPrayerName;
+  final Set<String> completedPrayers;
   final Function(String name, String time)? onPrayerSelected;
+  final Function(String name)? onPrayerToggle;
 
   const PrayerTimelineWidget({
     super.key,
     required this.prayerTimes,
     required this.nextPrayerName,
+    this.completedPrayers = const {},
     this.onPrayerSelected,
+    this.onPrayerToggle,
   });
 
   IconData _getPrayerIcon(String name) {
@@ -44,7 +48,7 @@ class PrayerTimelineWidget extends StatelessWidget {
     final prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
     return SizedBox(
-      height: 120,
+      height: 124,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -54,6 +58,8 @@ class PrayerTimelineWidget extends StatelessWidget {
           final name = prayers[index];
           final time = _cleanTime(prayerTimes[name]);
           final isNext = name.toLowerCase() == nextPrayerName.toLowerCase();
+          final isCompleted = completedPrayers.contains(name.toLowerCase());
+          final isSunrise = name.toLowerCase() == 'sunrise';
 
           return GestureDetector(
             onTap: () {
@@ -62,13 +68,21 @@ class PrayerTimelineWidget extends StatelessWidget {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
-              width: 96,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              width: 100,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
               decoration: BoxDecoration(
-                color: isNext ? const Color(0xFF546356) : Colors.white.withOpacity(0.85),
+                color: isNext
+                    ? const Color(0xFF546356)
+                    : isCompleted
+                        ? const Color(0xFFE8EFE8)
+                        : Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: isNext ? const Color(0xFF546356) : Colors.white,
+                  color: isNext
+                      ? const Color(0xFF546356)
+                      : isCompleted
+                          ? const Color(0xFF546356).withOpacity(0.4)
+                          : Colors.white,
                   width: 1.5,
                 ),
                 boxShadow: [
@@ -81,30 +95,59 @@ class PrayerTimelineWidget extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Stack(
                 children: [
-                  Icon(
-                    _getPrayerIcon(name),
-                    size: 22,
-                    color: isNext ? Colors.white : const Color(0xFF546356),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        _getPrayerIcon(name),
+                        size: 22,
+                        color: isNext
+                            ? Colors.white
+                            : isCompleted
+                                ? const Color(0xFF546356)
+                                : const Color(0xFF546356),
+                      ),
+                      Text(
+                        name,
+                        style: GoogleFonts.manrope(
+                          fontSize: 13,
+                          fontWeight: isNext || isCompleted ? FontWeight.w700 : FontWeight.w600,
+                          color: isNext
+                              ? Colors.white
+                              : isCompleted
+                                  ? const Color(0xFF31332E)
+                                  : const Color(0xFF31332E),
+                        ),
+                      ),
+                      Text(
+                        time,
+                        style: GoogleFonts.manrope(
+                          fontSize: 13,
+                          fontWeight: isNext ? FontWeight.w800 : FontWeight.w600,
+                          color: isNext
+                              ? const Color(0xFFD7E7D6)
+                              : isCompleted
+                                  ? const Color(0xFF546356)
+                                  : const Color(0xFF5E6059),
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    name,
-                    style: GoogleFonts.manrope(
-                      fontSize: 13,
-                      fontWeight: isNext ? FontWeight.w700 : FontWeight.w600,
-                      color: isNext ? Colors.white : const Color(0xFF31332E),
+                  if (isCompleted && !isSunrise)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF546356),
+                        ),
+                        child: const Icon(Icons.check, size: 10, color: Colors.white),
+                      ),
                     ),
-                  ),
-                  Text(
-                    time,
-                    style: GoogleFonts.manrope(
-                      fontSize: 13,
-                      fontWeight: isNext ? FontWeight.w800 : FontWeight.w500,
-                      color: isNext ? const Color(0xFFD7E7D6) : const Color(0xFF5E6059),
-                    ),
-                  ),
                 ],
               ),
             ),

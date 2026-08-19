@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'prayer_service.dart';
+import 'planning_repository.dart';
+import 'models.dart';
 import 'journal_screen.dart';
 import 'widgets/widgets.dart';
 import 'services/widget_service.dart';
@@ -20,6 +23,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class HomeScreenState extends State<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _dhikrKey = GlobalKey();
+
   Map<String, dynamic>? _prayerTimes;
   Map<String, dynamic>? _user;
   bool _isLoading = true;
@@ -31,45 +37,15 @@ class HomeScreenState extends State<HomeScreen> {
   double _prayerProgress = 0.0;
   Timer? _timer;
 
-  // Interactive Dhikr State
-  int _dhikrCount = 0;
-  int _dhikrTargetIndex = 0;
-  final List<Map<String, dynamic>> _dhikrItems = [
-    {'title': 'SUBHANALLAH', 'target': 33, 'meaning': 'Glory be to Allah'},
-    {'title': 'ALHAMDULILLAH', 'target': 33, 'meaning': 'Praise be to Allah'},
-    {'title': 'ALLAHU AKBAR', 'target': 33, 'meaning': 'Allah is the Greatest'},
-    {'title': 'ASTAGHFIRULLAH', 'target': 33, 'meaning': 'I seek forgiveness from Allah'},
-    {'title': 'LA ILAHA ILLA ALLAH', 'target': 33, 'meaning': 'There is no god but Allah'},
-  ];
-
-  // Interactive Daily Verse State
-  int _verseIndex = 0;
-  final List<Map<String, String>> _verses = [
-    {
-      'text': '"Verily, with every hardship comes ease."',
-      'ref': 'Surah Ash-Sharh 94:6'
-    },
-    {
-      'text': '"So remember Me; I will remember you."',
-      'ref': 'Surah Al-Baqarah 2:152'
-    },
-    {
-      'text': '"Call upon Me; I will respond to you."',
-      'ref': 'Surah Ghafir 40:60'
-    },
-    {
-      'text': '"Unquestionably, by the remembrance of Allah hearts find rest."',
-      'ref': 'Surah Ar-Ra\'d 13:28'
-    },
-    {
-      'text': '"And He found you lost and guided you."',
-      'ref': 'Surah Ad-Duha 93:7'
-    },
-    {
-      'text': '"Patience and prayer are your best helpers."',
-      'ref': 'Surah Al-Baqarah 2:45'
-    },
-  ];
+  // Real Dynamic Functional State
+  Set<String> _completedPrayers = {};
+  int _completedTasksCount = 0;
+  int _totalTasksCount = 0;
+  int _streakDays = 1;
+  List<bool> _weekProgress = [false, false, false, false, false, false, false];
+  int _dailyTotalDhikrCount = 0;
+  int _prayerDhikrCount = 0;
+  String _lastDhikrPrayer = '';
 
   @override
   void initState() {
@@ -86,9 +62,29 @@ class HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _formatDateKey(DateTime date) {
+    final year = date.year;
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
   Future<void> refreshData() async {
-    await _fetchUserData();
-    await _fetchPrayerTimes();
+    await Future.wait([
+      _fetchUserData(),
+      _fetchPrayerTimes(),
+      _loadCompletedPrayers(),
+      _loadTasksData(),
+      _loadDhikrCount(),
+    ]);
+    await _calculateStreakAndWeek();
   }
 
   Future<void> _fetchUserData() async {
@@ -100,12 +96,6 @@ class HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (_) {}
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 
   Future<void> _fetchPrayerTimes() async {
@@ -228,6 +218,18 @@ class HomeScreenState extends State<HomeScreen> {
         return m != null ? m.group(0)! : raw;
       }
 
+      // Check if prayer period transitioned -> reset per-prayer button counter
+      if (_lastDhikrPrayer.isNotEmpty && _lastDhikrPrayer.toLowerCase() != prevName.toLowerCase()) {
+        _prayerDhikrCount = 0;
+        _lastDhikrPrayer = prevName;
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setInt('prayer_dhikr_count', 0);
+          prefs.setString('last_dhikr_prayer', prevName);
+        });
+      } else if (_lastDhikrPrayer.isEmpty) {
+        _lastDhikrPrayer = prevName;
+      }
+
       setState(() {
         _nextPrayerName = nextName!;
         _nextPrayerTime = cleanTime(_prayerTimes![nextName] ?? '');
@@ -245,6 +247,8 @@ class HomeScreenState extends State<HomeScreen> {
         prevPrayerName: _prevPrayerName,
         prevPrayerTime: _prevPrayerTime,
         cityName: _user?['city'] ?? 'Addis Ababa',
+        completedTasks: _completedTasksCount,
+        totalTasks: _totalTasksCount,
       );
     }
   }
@@ -256,76 +260,200 @@ class HomeScreenState extends State<HomeScreen> {
     return '${d.inMinutes} mins';
   }
 
-  void _incrementDhikr() {
-    HapticFeedback.lightImpact();
+  // --- Real Prayer Completion Tracking ---
+  Future<void> _loadCompletedPrayers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'prayers_completed_${_formatDateKey(DateTime.now())}';
+      final list = prefs.getStringList(todayKey) ?? [];
+      setState(() {
+        _completedPrayers = list.map((e) => e.toLowerCase()).toSet();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _togglePrayerCompletion(String prayerName) async {
+    final nameKey = prayerName.toLowerCase();
+    if (nameKey == 'sunrise') return;
+
+    HapticFeedback.mediumImpact();
+    final isCurrentlyCompleted = _completedPrayers.contains(nameKey);
+
     setState(() {
-      _dhikrCount++;
-      final currentTarget = _dhikrItems[_dhikrTargetIndex]['target'] as int;
-      if (_dhikrCount >= currentTarget) {
-        _dhikrCount = 0;
-        _dhikrTargetIndex = (_dhikrTargetIndex + 1) % _dhikrItems.length;
-        HapticFeedback.vibrate();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Completed! Next: ${_dhikrItems[_dhikrTargetIndex]['title']}'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: const Color(0xFF546356),
-          ),
-        );
+      if (isCurrentlyCompleted) {
+        _completedPrayers.remove(nameKey);
+      } else {
+        _completedPrayers.add(nameKey);
       }
     });
 
-    final currentItem = _dhikrItems[_dhikrTargetIndex];
-    WidgetService.updateDhikrWidget(
-      title: currentItem['title'] ?? 'SUBHANALLAH',
-      meaning: currentItem['meaning'] ?? 'Glory be to Allah',
-      count: _dhikrCount,
-      target: currentItem['target'] ?? 33,
-    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'prayers_completed_${_formatDateKey(DateTime.now())}';
+      await prefs.setStringList(todayKey, _completedPrayers.toList());
+    } catch (_) {}
+
+    await _calculateStreakAndWeek();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            !isCurrentlyCompleted
+                ? 'Alhamdulillah! $prayerName marked as prayed.'
+                : '$prayerName uncompleted.',
+            style: GoogleFonts.manrope(fontWeight: FontWeight.w600),
+          ),
+          duration: const Duration(seconds: 2),
+          backgroundColor: !isCurrentlyCompleted ? const Color(0xFF546356) : const Color(0xFF5E6059),
+        ),
+      );
+    }
   }
 
-  void _resetDhikr() {
-    HapticFeedback.mediumImpact();
+  // --- Real Tasks Data ---
+  Future<void> _loadTasksData() async {
+    try {
+      final repo = PlanningRepository();
+      final plan = await repo.getDayPlan(DateTime.now());
+      if (plan != null) {
+        final allTasks = plan.sections.values.expand((tasks) => tasks).toList();
+        final completed = allTasks.where((t) => t.isCompleted == true).length;
+        setState(() {
+          _totalTasksCount = allTasks.length;
+          _completedTasksCount = completed;
+        });
+        await WidgetService.syncTasksToWidget(allTasks);
+      }
+    } catch (_) {}
+  }
+
+  // --- Real Dhikr Tracking (Continuous whole-day + Per-prayer reset button) ---
+  Future<void> _loadDhikrCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'daily_dhikr_${_formatDateKey(DateTime.now())}';
+      final dailyCount = prefs.getInt(todayKey) ?? prefs.getInt('total_dhikr_count') ?? 0;
+      final prayerCount = prefs.getInt('prayer_dhikr_count') ?? 0;
+      final lastPrayer = prefs.getString('last_dhikr_prayer') ?? '';
+
+      final currentPrayer = _prevPrayerName != '...' ? _prevPrayerName : 'Fajr';
+      int activePrayerCount = prayerCount;
+
+      if (lastPrayer.isNotEmpty && lastPrayer.toLowerCase() != currentPrayer.toLowerCase()) {
+        // Reset the button count for the new prayer!
+        activePrayerCount = 0;
+        await prefs.setInt('prayer_dhikr_count', 0);
+        await prefs.setString('last_dhikr_prayer', currentPrayer);
+      }
+
+      setState(() {
+        _dailyTotalDhikrCount = dailyCount;
+        _prayerDhikrCount = activePrayerCount;
+        _lastDhikrPrayer = currentPrayer;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _onDhikrCountUpdated(int prayerCount, int dailyTotalCount) async {
     setState(() {
-      _dhikrCount = 0;
+      _prayerDhikrCount = prayerCount;
+      _dailyTotalDhikrCount = dailyTotalCount;
     });
-    final currentItem = _dhikrItems[_dhikrTargetIndex];
-    WidgetService.updateDhikrWidget(
-      title: currentItem['title'] ?? 'SUBHANALLAH',
-      meaning: currentItem['meaning'] ?? 'Glory be to Allah',
-      count: 0,
-      target: currentItem['target'] ?? 33,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Dhikr counter reset'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final todayKey = 'daily_dhikr_${_formatDateKey(DateTime.now())}';
+      await prefs.setInt(todayKey, dailyTotalCount);
+      await prefs.setInt('total_dhikr_count', dailyTotalCount);
+      await prefs.setInt('prayer_dhikr_count', prayerCount);
+      await prefs.setString('last_dhikr_prayer', _prevPrayerName != '...' ? _prevPrayerName : 'Fajr');
+
+      // Update home screen widget
+      await WidgetService.updateDhikrWidget(
+        title: 'SUBHANALLAH',
+        meaning: 'Glory be to Allah',
+        count: dailyTotalCount,
+        target: 33,
+      );
+    } catch (_) {}
   }
 
-  void _nextVerse() {
+  // --- Streak & Weekly Rhythm Calculation ---
+  Future<void> _calculateStreakAndWeek() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final repo = PlanningRepository();
+      final now = DateTime.now();
+
+      // 1. Calculate 7-day week progress (Monday to Sunday of current week)
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      List<bool> weekProgress = [];
+
+      for (int i = 0; i < 7; i++) {
+        final day = DateTime(monday.year, monday.month, monday.day + i);
+        final dateKey = _formatDateKey(day);
+        final prayerList = prefs.getStringList('prayers_completed_$dateKey') ?? [];
+        
+        bool isDone = prayerList.isNotEmpty;
+        if (!isDone) {
+          final plan = await repo.getDayPlan(day);
+          if (plan != null) {
+            final tasks = plan.sections.values.expand((t) => t).toList();
+            if (tasks.any((t) => t.isCompleted == true)) {
+              isDone = true;
+            }
+          }
+        }
+        weekProgress.add(isDone);
+      }
+
+      // 2. Calculate consecutive day streak
+      int streak = 0;
+      for (int i = 0; i < 30; i++) {
+        final day = DateTime(now.year, now.month, now.day - i);
+        final dateKey = _formatDateKey(day);
+        final prayerList = prefs.getStringList('prayers_completed_$dateKey') ?? [];
+        bool dayActive = prayerList.isNotEmpty;
+
+        if (!dayActive) {
+          final plan = await repo.getDayPlan(day);
+          if (plan != null) {
+            final tasks = plan.sections.values.expand((t) => t).toList();
+            if (tasks.any((t) => t.isCompleted == true)) {
+              dayActive = true;
+            }
+          }
+        }
+
+        if (dayActive) {
+          streak++;
+        } else {
+          // If today hasn't had activity yet, don't break previous streak
+          if (i == 0) continue;
+          break;
+        }
+      }
+
+      if (streak == 0 && (_completedPrayers.isNotEmpty || _completedTasksCount > 0)) {
+        streak = 1;
+      }
+
+      setState(() {
+        _weekProgress = weekProgress;
+        _streakDays = streak > 0 ? streak : 1;
+      });
+    } catch (_) {}
+  }
+
+  void _scrollToDhikr() {
     HapticFeedback.selectionClick();
-    setState(() {
-      _verseIndex = (_verseIndex + 1) % _verses.length;
-    });
-    final v = _verses[_verseIndex];
-    WidgetService.updateVerseWidget(
-      text: v['text'] ?? '',
-      reference: v['ref'] ?? '',
-    );
-  }
-
-  void _copyVerse() {
-    final v = _verses[_verseIndex];
-    Clipboard.setData(ClipboardData(text: '${v['text']} - ${v['ref']}'));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Verse copied to clipboard'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Color(0xFF546356),
-      ),
-    );
+    if (_dhikrKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        _dhikrKey.currentContext!,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _showQiblaSheet() {
@@ -421,84 +549,130 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   void _showPrayerDetails(String name, String time) {
-    Map<String, String> details = {
+    final Map<String, String> details = {
       'Fajr': '2 Rak\'ats Fard • 2 Rak\'ats Sunnah before',
+      'Sunrise': 'Islamic sunrise • Duha prayer time starts 15 mins after',
       'Dhuhr': '4 Rak\'ats Fard • 4 Sunnah before, 2 Sunnah after',
       'Asr': '4 Rak\'ats Fard • 4 Sunnah before (optional)',
       'Maghrib': '3 Rak\'ats Fard • 2 Sunnah after',
       'Isha': '4 Rak\'ats Fard • 2 Sunnah after, 3 Witr',
     };
 
+    final isSunrise = name.toLowerCase() == 'sunrise';
+    final isPrayed = _completedPrayers.contains(name.toLowerCase());
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(32),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE3E3DB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final currentlyPrayed = _completedPrayers.contains(name.toLowerCase());
+
+          return Container(
+            padding: const EdgeInsets.all(32),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name.toUpperCase(),
-                  style: GoogleFonts.manrope(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF546356),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE3E3DB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      name.toUpperCase(),
+                      style: GoogleFonts.manrope(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF546356),
+                      ),
+                    ),
+                    Text(
+                      time,
+                      style: GoogleFonts.manrope(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w300,
+                        color: const Color(0xFF31332E),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  time,
+                  details[name] ?? 'Daily Obligatory Prayer',
                   style: GoogleFonts.manrope(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w300,
-                    color: const Color(0xFF31332E),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF5E6059),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Interactive Log / Mark Prayed Button
+                if (!isSunrise) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        _togglePrayerCompletion(name);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: currentlyPrayed ? const Color(0xFFE8EFE8) : const Color(0xFF546356),
+                        foregroundColor: currentlyPrayed ? const Color(0xFF546356) : Colors.white,
+                        elevation: currentlyPrayed ? 0 : 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                          side: currentlyPrayed ? const BorderSide(color: Color(0xFF546356), width: 1.5) : BorderSide.none,
+                        ),
+                      ),
+                      icon: Icon(
+                        currentlyPrayed ? Icons.check_circle : Icons.check_circle_outline,
+                        size: 20,
+                      ),
+                      label: Text(
+                        currentlyPrayed ? 'PRAYED ✓ (TAP TO UNMARK)' : 'MARK AS PRAYED',
+                        style: GoogleFonts.manrope(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF5E6059),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                    ),
+                    child: Text('CLOSE', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              details[name] ?? 'Daily Obligatory Prayer',
-              style: GoogleFonts.manrope(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF5E6059),
-              ),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF546356),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                ),
-                child: Text('CLOSE', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -539,6 +713,7 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     const backgroundColor = Color(0xFFFBF9F4);
+    final completedPrayersCount = _completedPrayers.where((p) => p != 'sunrise').length;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -554,15 +729,19 @@ class HomeScreenState extends State<HomeScreen> {
                   child: _isLoading 
                     ? const Center(child: CircularProgressIndicator(color: Color(0xFF546356)))
                     : RefreshIndicator(
-                        onRefresh: _fetchPrayerTimes,
+                        onRefresh: refreshData,
                         color: const Color(0xFF546356),
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 28.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildHeader(),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 24),
+                              
+                              // 1. Next Prayer Pulse Card
                               PrayerPulseCard(
                                 nextPrayerName: _nextPrayerName,
                                 nextPrayerTime: _nextPrayerTime,
@@ -573,7 +752,9 @@ class HomeScreenState extends State<HomeScreen> {
                                 onQiblaTap: _showQiblaSheet,
                                 onPrayerDetailsTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
                               ),
-                              const SizedBox(height: 32),
+                              const SizedBox(height: 28),
+
+                              // 2. Prayer Timeline Schedule
                               SectionHeader(
                                 eyebrow: 'DAILY RHYTHMS',
                                 title: 'Prayer Schedule',
@@ -594,35 +775,66 @@ class HomeScreenState extends State<HomeScreen> {
                                 ),
                                 onTrailingTap: _showQiblaSheet,
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 14),
                               if (_prayerTimes != null)
                                 PrayerTimelineWidget(
                                   prayerTimes: _prayerTimes!,
                                   nextPrayerName: _nextPrayerName,
+                                  completedPrayers: _completedPrayers,
                                   onPrayerSelected: _showPrayerDetails,
+                                  onPrayerToggle: _togglePrayerCompletion,
                                 ),
-                              const SizedBox(height: 32),
+                              const SizedBox(height: 28),
+
+                              // 3. Quick Stats Grid Card
                               QuickStatsWidget(
+                                completedPrayers: completedPrayersCount,
+                                totalPrayers: 5,
+                                completedTasks: _completedTasksCount,
+                                totalTasks: _totalTasksCount,
+                                dhikrCount: _dailyTotalDhikrCount,
                                 cityName: _user?['city'] ?? 'Addis Ababa',
                                 onPrayersTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
                                 onTasksTap: () => widget.onNavigateTab?.call(1),
-                                onDhikrTap: () {},
+                                onDhikrTap: _scrollToDhikr,
                                 onQiblaTap: _showQiblaSheet,
                               ),
-                              const SizedBox(height: 32),
-                              const HabitStreakTracker(
-                                streakDays: 5,
-                                completedPrayers: 3,
+                              const SizedBox(height: 28),
+
+                              // 4. Habit & Consistency Tracker
+                              HabitStreakTracker(
+                                streakDays: _streakDays,
+                                completedPrayers: completedPrayersCount,
                                 totalPrayers: 5,
-                                completedTasks: 4,
-                                totalTasks: 6,
+                                completedTasks: _completedTasksCount,
+                                totalTasks: _totalTasksCount,
+                                weekProgress: _weekProgress,
                               ),
-                              const SizedBox(height: 32),
-                              const DhikrTasbihWidget(),
-                              const SizedBox(height: 32),
+                              const SizedBox(height: 28),
+
+                              // 5. Interactive Dhikr Counter (Dual: per-prayer button + continuous whole-day)
+                              Container(
+                                key: _dhikrKey,
+                                child: DhikrTasbihWidget(
+                                  initialPrayerCount: _prayerDhikrCount,
+                                  initialDailyCount: _dailyTotalDhikrCount,
+                                  prayerName: _prevPrayerName,
+                                  onCountChanged: _onDhikrCountUpdated,
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+
+                              // 6. Daily Reflection Ayah
                               const DailyReflectionCard(),
-                              const SizedBox(height: 32),
-                              const FocusTimerCard(),
+                              const SizedBox(height: 28),
+
+                              // 7. Focus & Khushu Timer
+                              FocusTimerCard(
+                                onSessionCompleted: () async {
+                                  await _loadTasksData();
+                                  await _calculateStreakAndWeek();
+                                },
+                              ),
                               const SizedBox(height: 120),
                             ],
                           ),
@@ -750,461 +962,22 @@ class HomeScreenState extends State<HomeScreen> {
           child: RichText(
             text: TextSpan(
               style: GoogleFonts.manrope(
-                fontSize: 36,
-                fontWeight: FontWeight.w200,
-                height: 1.1,
+                fontSize: 26,
+                fontWeight: FontWeight.w300,
                 color: const Color(0xFF31332E),
+                height: 1.2,
               ),
               children: [
-                const TextSpan(text: 'Welcome back,\n'),
+                const TextSpan(text: 'Salam, '),
                 TextSpan(
-                  text: '${_user?['name'] ?? 'User'} ✏️',
-                  style: GoogleFonts.manrope(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF546356),
-                  ),
+                  text: _user?['name'] ?? 'Muslim',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF546356)),
                 ),
               ],
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPrayerPulse() {
-    return GestureDetector(
-      onTap: () => _showPrayerDetails(_nextPrayerName, _nextPrayerTime),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.5),
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF31332E).withOpacity(0.06),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'NEXT PRAYER',
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                    color: const Color(0xFF5E6059),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: GoogleFonts.manrope(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -1.5,
-                      color: const Color(0xFF546356),
-                    ),
-                    children: [
-                      TextSpan(text: '$_nextPrayerName '),
-                      TextSpan(
-                        text: 'in ${_formatDuration(_timeUntilNext)}',
-                        style: GoogleFonts.manrope(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w300,
-                          color: const Color(0xFF5E6059),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Container(
-                  height: 6,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFEEE7),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: _prayerProgress,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF546356),
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${_prevPrayerName.toUpperCase()} $_prevPrayerTime',
-                      style: GoogleFonts.manrope(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                        color: const Color(0xFF5E6059),
-                      ),
-                    ),
-                    Text(
-                      '${_nextPrayerName.toUpperCase()} $_nextPrayerTime',
-                      style: GoogleFonts.manrope(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                        color: const Color(0xFF5E6059),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDailyRhythms(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'PRAYER TIME',
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-                color: const Color(0xFF31332E),
-              ),
-            ),
-            GestureDetector(
-              onTap: _showQiblaSheet,
-              child: Row(
-                children: [
-                  const Icon(Icons.explore_outlined, size: 16, color: Color(0xFF546356)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'View Qibla',
-                    style: GoogleFonts.manrope(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF546356),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildPrayerCard('Fajr', _prayerTimes?['Fajr'] ?? '--:--', Icons.wb_twilight, _nextPrayerName == 'Fajr'),
-                    const SizedBox(width: 12),
-                    _buildPrayerCard('Dhuhr', _prayerTimes?['Dhuhr'] ?? '--:--', Icons.light_mode, _nextPrayerName == 'Dhuhr'),
-                    const SizedBox(width: 12),
-                    _buildPrayerCard('Asr', _prayerTimes?['Asr'] ?? '--:--', Icons.wb_sunny, _nextPrayerName == 'Asr'),
-                    const SizedBox(width: 12),
-                    _buildPrayerCard('Maghrib', _prayerTimes?['Maghrib'] ?? '--:--', Icons.wb_twilight, _nextPrayerName == 'Maghrib'),
-                    const SizedBox(width: 12),
-                    _buildPrayerCard('Isha', _prayerTimes?['Isha'] ?? '--:--', Icons.bedtime, _nextPrayerName == 'Isha'),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPrayerCard(String name, String time, IconData icon, bool isActive) {
-    return GestureDetector(
-      onTap: () => _showPrayerDetails(name, time),
-      child: Container(
-        width: 112,
-        height: 148,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isActive ? null : const Color(0xFFF5F4ED),
-          gradient: isActive
-              ? const LinearGradient(
-                  colors: [Color(0xFF546356), Color(0xFF48574A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF546356).withOpacity(0.2),
-                    blurRadius: 15,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : [],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? Colors.white : const Color(0xFF5E6059),
-              size: 24,
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name.toUpperCase(),
-                  style: GoogleFonts.manrope(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    color: isActive ? Colors.white.withOpacity(0.8) : const Color(0xFF5E6059),
-                  ),
-                ),
-                Text(
-                  time,
-                  style: GoogleFonts.manrope(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.white : const Color(0xFF31332E),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReflectionGrid() {
-    final v = _verses[_verseIndex];
-    final dhikr = _dhikrItems[_dhikrTargetIndex];
-
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: _nextVerse,
-          onLongPress: _copyVerse,
-          child: _buildBentoCard(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'DAILY VERSE',
-                            style: GoogleFonts.manrope(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                              color: const Color(0xFF5E6059),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '• TAP FOR NEXT',
-                            style: GoogleFonts.manrope(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF546356),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        v['text']!,
-                        style: GoogleFonts.manrope(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          fontStyle: FontStyle.italic,
-                          height: 1.5,
-                          color: const Color(0xFF31332E),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        v['ref']!,
-                        style: GoogleFonts.manrope(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF546356),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD7E7D6),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.menu_book, color: Color(0xFF546356), size: 24),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: _incrementDhikr,
-                onLongPress: _resetDhikr,
-                child: _buildSimpleBentoCard(
-                  icon: Icons.touch_app,
-                  title: 'DHIKR TAP',
-                  content: Column(
-                    children: [
-                      Text(
-                        '$_dhikrCount / ${dhikr['target']}',
-                        style: GoogleFonts.manrope(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF31332E),
-                        ),
-                      ),
-                      Text(
-                        dhikr['title'] as String,
-                        style: GoogleFonts.manrope(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                          color: const Color(0xFF546356),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => widget.onNavigateTab?.call(2),
-                child: _buildSimpleBentoCard(
-                  icon: Icons.edit_note,
-                  title: 'JOURNAL',
-                  content: Column(
-                    children: [
-                      const Icon(Icons.auto_stories, color: Color(0xFF546356), size: 24),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Write reflection',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.manrope(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF5E6059),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBentoCard({required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.5),
-              width: 0.5,
-            ),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSimpleBentoCard({
-    required IconData icon,
-    required String title,
-    required Widget content,
-  }) {
-    return Container(
-      height: 140,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F4ED),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: const Color(0xFF546356), size: 20),
-              Text(
-                title,
-                style: GoogleFonts.manrope(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: const Color(0xFF5E6059),
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          content,
-          const Spacer(),
-        ],
-      ),
     );
   }
 }

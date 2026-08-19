@@ -19,10 +19,18 @@ class DhikrItem {
 
 class DhikrTasbihWidget extends StatefulWidget {
   final VoidCallback? onCompletedCycle;
+  final Function(int prayerCount, int dailyTotalCount)? onCountChanged;
+  final int initialPrayerCount;
+  final int initialDailyCount;
+  final String prayerName;
 
   const DhikrTasbihWidget({
     super.key,
     this.onCompletedCycle,
+    this.onCountChanged,
+    this.initialPrayerCount = 0,
+    this.initialDailyCount = 0,
+    this.prayerName = 'Dhuhr',
   });
 
   @override
@@ -30,7 +38,8 @@ class DhikrTasbihWidget extends StatefulWidget {
 }
 
 class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTickerProviderStateMixin {
-  int _count = 0;
+  late int _prayerCount;
+  late int _dailyTotalCount;
   int _selectedPresetIndex = 0;
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -77,6 +86,8 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
   @override
   void initState() {
     super.initState();
+    _prayerCount = widget.initialPrayerCount;
+    _dailyTotalCount = widget.initialDailyCount;
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 100),
@@ -85,6 +96,21 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
       value: 1.0,
     );
     _scaleAnimation = _animController;
+  }
+
+  @override
+  void didUpdateWidget(covariant DhikrTasbihWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialPrayerCount != widget.initialPrayerCount) {
+      setState(() {
+        _prayerCount = widget.initialPrayerCount;
+      });
+    }
+    if (oldWidget.initialDailyCount != widget.initialDailyCount) {
+      setState(() {
+        _dailyTotalCount = widget.initialDailyCount;
+      });
+    }
   }
 
   @override
@@ -98,10 +124,12 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
     _animController.reverse().then((_) => _animController.forward());
 
     setState(() {
-      _count++;
+      _prayerCount++;
+      _dailyTotalCount++;
+
       final currentPreset = _presets[_selectedPresetIndex];
-      if (_count >= currentPreset.defaultTarget) {
-        _count = 0;
+      if (_prayerCount >= currentPreset.defaultTarget) {
+        _prayerCount = 0;
         _selectedPresetIndex = (_selectedPresetIndex + 1) % _presets.length;
         HapticFeedback.vibrate();
         widget.onCompletedCycle?.call();
@@ -114,27 +142,34 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
         );
       }
     });
+
+    widget.onCountChanged?.call(_prayerCount, _dailyTotalCount);
   }
 
   void _reset() {
     HapticFeedback.mediumImpact();
     setState(() {
-      _count = 0;
+      _prayerCount = 0;
     });
+    widget.onCountChanged?.call(0, _dailyTotalCount);
   }
 
   void _selectPreset(int index) {
     HapticFeedback.selectionClick();
     setState(() {
       _selectedPresetIndex = index;
-      _count = 0;
+      _prayerCount = 0;
     });
+    widget.onCountChanged?.call(0, _dailyTotalCount);
   }
 
   @override
   Widget build(BuildContext context) {
     final current = _presets[_selectedPresetIndex];
-    final progress = (_count / current.defaultTarget).clamp(0.0, 1.0);
+    final progress = (_prayerCount / current.defaultTarget).clamp(0.0, 1.0);
+    final prayerLabel = widget.prayerName.isNotEmpty && widget.prayerName != '...'
+        ? 'AFTER ${widget.prayerName.toUpperCase()}'
+        : 'DAILY DHIKR';
 
     return Container(
       width: double.infinity,
@@ -154,7 +189,7 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Header row with preset switcher
+          // Header row with prayer session badge & daily total indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -165,17 +200,34 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'DAILY TASBIH',
+                  prayerLabel,
                   style: GoogleFonts.manrope(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
+                    letterSpacing: 1.2,
                     color: const Color(0xFF546356),
                   ),
                 ),
               ),
               Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEBF4B3).withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD0E185).withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      'Today: $_dailyTotalCount',
+                      style: GoogleFonts.manrope(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF435A22),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   PopupMenuButton<int>(
                     icon: const Icon(Icons.tune_outlined, size: 20, color: Color(0xFF5E6059)),
                     tooltip: 'Change Dhikr',
@@ -198,7 +250,7 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
                   IconButton(
                     onPressed: _reset,
                     icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF5E6059)),
-                    tooltip: 'Reset counter',
+                    tooltip: 'Reset prayer counter',
                   ),
                 ],
               ),
@@ -229,7 +281,7 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
           ),
           const SizedBox(height: 24),
 
-          // Main Tap Button with Circular Progress
+          // Main Tap Button with Circular Progress (resets every prayer)
           ScaleTransition(
             scale: _scaleAnimation,
             child: GestureDetector(
@@ -268,7 +320,7 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            '$_count',
+                            '$_prayerCount',
                             style: GoogleFonts.manrope(
                               fontSize: 34,
                               fontWeight: FontWeight.w800,
@@ -293,7 +345,7 @@ class _DhikrTasbihWidgetState extends State<DhikrTasbihWidget> with SingleTicker
           ),
           const SizedBox(height: 16),
           Text(
-            'Tap circle to count',
+            'Tap button to count • Resets each prayer',
             style: GoogleFonts.manrope(
               fontSize: 11,
               fontWeight: FontWeight.w500,
